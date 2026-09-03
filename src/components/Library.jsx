@@ -55,9 +55,9 @@ function Foods({ data, save, openWindow }) {
         <div className="tscroll"><table className="t"><thead><tr><th>Food</th><th>Category</th><th>Status</th><th>Confidence</th><th>Last tested</th><th></th></tr></thead>
           <tbody>{sorted.map((x) => (
             <tr key={x.id}>
-              <td>{x.name}</td><td style={{ color: "var(--mute)" }}>{x.category || "—"}</td>
-              <td><select value={x.status} onChange={(e) => setStatus(x.id, e.target.value)} className={`pill ${x.status.replace(" ", "-")}`}>{FOOD_STATUS.map((s) => <option key={s}>{s}</option>)}</select></td>
-              <td>{x.confidence}</td><td>{x.lastTested || "—"}</td>
+              <td data-label="Food">{x.name}</td><td data-label="Category" style={{ color: "var(--mute)" }}>{x.category || "—"}</td>
+              <td data-label="Status"><select value={x.status} onChange={(e) => setStatus(x.id, e.target.value)} className={`pill ${x.status.replace(" ", "-")}`}>{FOOD_STATUS.map((s) => <option key={s}>{s}</option>)}</select></td>
+              <td data-label="Confidence">{x.confidence}</td><td data-label="Last tested">{x.lastTested || "—"}</td>
               <td><button className="ht-link" onClick={() => remove(x.id)}>Remove</button></td>
             </tr>
           ))}</tbody></table></div>
@@ -121,12 +121,12 @@ function Interventions({ data, save, openWindow }) {
         <div className="tscroll"><table className="t"><thead><tr><th>On</th><th>Name</th><th>Type</th><th>Dose</th><th>Start</th><th>End</th><th>From</th><th>Status</th><th>Outcome</th><th></th></tr></thead>
           <tbody>{sorted.map((x) => (
             <tr key={x.id} className={isOn(x) ? "" : "off"}>
-              <td><button className={"switch" + (isOn(x) ? " on" : "")} onClick={() => toggleOn(x)} title={isOn(x) ? "Taking — switch off" : "Not taking — switch on"} /></td>
-              <td>{x.name}</td><td style={{ color: "var(--mute)" }}>{x.type}</td><td>{x.dose || "—"}</td><td>{x.start || "—"}</td>
-              <td><input type="date" value={x.end || ""} onChange={(e) => update(x.id, { end: e.target.value })} style={{ width: 118 }} /></td>
-              <td style={{ color: "var(--mute)" }}>{x.source || "—"}</td>
-              <td><select value={x.status} onChange={(e) => update(x.id, { status: e.target.value })} className={`pill ${x.status}`}>{INT_STATUS.map((s) => <option key={s}>{s}</option>)}</select></td>
-              <td><input value={x.outcome || ""} onChange={(e) => update(x.id, { outcome: e.target.value })} placeholder="What happened" style={{ width: 130 }} /></td>
+              <td data-label="Taking"><button className={"switch" + (isOn(x) ? " on" : "")} onClick={() => toggleOn(x)} title={isOn(x) ? "Taking — switch off" : "Not taking — switch on"} /></td>
+              <td data-label="Name">{x.name}</td><td data-label="Type" style={{ color: "var(--mute)" }}>{x.type}</td><td data-label="Dose">{x.dose || "—"}</td><td data-label="Start">{x.start || "—"}</td>
+              <td data-label="End"><input type="date" value={x.end || ""} onChange={(e) => update(x.id, { end: e.target.value })} style={{ width: 118 }} /></td>
+              <td data-label="From" style={{ color: "var(--mute)" }}>{x.source || "—"}</td>
+              <td data-label="Status"><select value={x.status} onChange={(e) => update(x.id, { status: e.target.value })} className={`pill ${x.status}`}>{INT_STATUS.map((s) => <option key={s}>{s}</option>)}</select></td>
+              <td data-label="Outcome"><input value={x.outcome || ""} onChange={(e) => update(x.id, { outcome: e.target.value })} placeholder="What happened" style={{ width: 130 }} /></td>
               <td><button className="ht-link" onClick={() => remove(x.id)}>Remove</button></td>
             </tr>
           ))}</tbody></table></div>

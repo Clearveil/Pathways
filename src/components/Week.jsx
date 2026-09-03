@@ -1,4 +1,5 @@
 import { today, addDays, mealsOn, logged, adherence, testingOn, fmtShort } from "../lib/utils.js";
+import { Flask } from "./Icons.jsx";
 
 export default function Week({ data, date, setDate, goDay }) {
   const d = new Date(date + "T12:00:00");
@@ -28,7 +29,7 @@ export default function Week({ data, date, setDate, goDay }) {
               {e?.inflammation && <span className="meta">Inflammation {e.inflammation}</span>}
               {e?.flare && <span className="meta flare">Flare · {e.severity}/5</span>}
               {e?.activity && <span className="meta">{e.activity[0].toUpperCase() + e.activity.slice(1)}{e.activityNote ? ` · ${e.activityNote}` : ""}</span>}
-              {testingOn(data, ds) && <span className="meta" style={{ color: "var(--acc-ink)" }}>Testing {testingOn(data, ds)}</span>}
+              {testingOn(data, ds) && <span className="meta" style={{ color: "var(--acc-ink)" }}><Flask size={11} /> Testing {testingOn(data, ds)}</span>}
               {(() => { const mo = mealsOn(data, e, ds); return mo && ds <= today() ? <span className="meta" style={{ color: mo.eaten === mo.planned ? "var(--acc-ink)" : undefined }}>Meals {mo.eaten}/{mo.planned}</span> : mo ? <span className="meta">{mo.planned} meals planned</span> : null; })()}
               {(e?.extras || []).length > 0 && <span className="meta">+{e.extras.length} unplanned</span>}
               {e?.notes && <span className="meta" style={{ color: "var(--mute)" }}>{e.notes.split("\n")[0].slice(0, 48)}{e.notes.length > 48 ? "…" : ""}</span>}

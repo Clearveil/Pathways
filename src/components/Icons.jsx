@@ -19,3 +19,4 @@ export const Upload = (p) => <I {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0
 export const Download = (p) => <I {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></I>;
 export const Trash = (p) => <I {...p}><path d="M3 6h18" /><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" /><path d="M5 6l1 14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-14" /></I>;
 export const X = (p) => <I {...p}><path d="M18 6L6 18M6 6l12 12" /></I>;
+export const Flask = (p) => <I {...p}><path d="M9 3h6" /><path d="M10 3v6.5L4.7 18.4A2 2 0 0 0 6.4 21h11.2a2 2 0 0 0 1.7-2.6L14 9.5V3" /><path d="M7.5 15h9" /></I>;

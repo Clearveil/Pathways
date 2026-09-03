@@ -11,7 +11,8 @@ import Library from "./components/Library.jsx";
 import Trends from "./components/Trends.jsx";
 import Menu from "./components/Menu.jsx";
 import Modal from "./components/Modal.jsx";
-import { Share, Sun, Moon, User, CloudCheck, CloudOff, Check, Drive, Upload, Download } from "./components/Icons.jsx";
+import PlanImport from "./components/PlanImport.jsx";
+import { Share, Sun, Moon, User, CloudCheck, CloudOff, Check, Drive, Upload, Download, Flask } from "./components/Icons.jsx";
 
 // The gate. Nothing below renders until Supabase says who is signed in.
 export default function App() {
@@ -42,6 +43,7 @@ function HealthTracker({ session }) {
   const [storageOk, setStorageOk] = useState(null);
   const [plan, setPlan] = useState("free");
   const [showPlan, setShowPlan] = useState(false);
+  const [planImport, setPlanImport] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -121,7 +123,7 @@ function HealthTracker({ session }) {
           <h1>Health log</h1>
         </div>
         <div className="ht-tabs">
-          {[["day","Day","Day"],["week","Week","Week"],["month","Month","Month"],["library","Foods & supplements","Foods"],["trends","Trends & insights","Trends"]].map(([k,l,s]) => (
+          {[["day","Day","Day"],["week","Week","Week"],["month","Month","Month"],["library","Library","Library"],["trends","Trends & insights","Trends"]].map(([k,l,s]) => (
             <button key={k} className={view === k ? "on" : ""} onClick={() => setView(k)}><span className="full">{l}</span><span className="short">{s}</span></button>
           ))}
         </div>
@@ -134,8 +136,9 @@ function HealthTracker({ session }) {
           <button className="ht-link desk-only" onClick={pickImport}>Import</button>
           <button className="ht-link desk-only" onClick={exportJSON}>Export</button>
           <Menu className="mob-only" icon={<Share />} label="Import or export">
-            <button onClick={exportJSON}><Download /> Export everything<small>A JSON file of all your data</small></button>
-            <button onClick={pickImport}><Upload /> Import<small>A Pathways export (.json)</small></button>
+            <button onClick={exportJSON}><Download /> Export everything<small>A JSON backup of all your data</small></button>
+            <button onClick={() => setPlanImport(true)}><Upload /> Import a meal or workout plan<small>CSV, with a guide</small></button>
+            <button onClick={pickImport}><Upload /> Restore a backup<small>A .json file exported from Pathways</small></button>
           </Menu>
           <button className="icon-btn" onClick={toggleTheme} title={dark ? "Light mode" : "Dark mode"} aria-label={dark ? "Light mode" : "Dark mode"}>{dark ? <Sun /> : <Moon />}</button>
           {!LOCAL_ONLY && (
@@ -150,7 +153,7 @@ function HealthTracker({ session }) {
       {msg && <p className="ht-msg mob-only">{msg}</p>}
       <main className="ht-main">
         <div className={"ht-status" + (openWindow ? "" : " clear")}>
-          <span className="dot" />
+          {openWindow ? <Flask /> : <span className="dot" />}
           {openWindow ? <span>Testing <b>{openWindow.name}</b> — day {dayN}. Hold everything else steady until you call it.</span>
                       : <span>No open test. You're at baseline — a clean starting point for one change.</span>}
         </div>
@@ -160,6 +163,7 @@ function HealthTracker({ session }) {
         {view === "library" && <Library data={data} save={save} openWindow={openWindow} />}
         {view === "trends" && <Trends data={data} dark={dark} />}
       </main>
+      <PlanImport data={data} save={save} open={planImport} onClose={() => setPlanImport(false)} onMessage={setMsg} />
       {showPlan && (
         <Modal title="Your plan" onClose={() => setShowPlan(false)}>
           <p style={{ margin: "0 0 6px" }}><b>{PLAN_LABEL[plan] || plan}</b> · {session.user.email}</p>

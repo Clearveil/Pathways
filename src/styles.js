@@ -165,6 +165,9 @@ export const css = `
   .modal .close { position:absolute; top:12px; right:12px; }
   .csv-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:8px; }
   .csv-ex { width:100%; height:auto; display:block; margin:6px 0 12px; color:var(--ink); }
+  .ht-tools { display:flex; align-items:center; gap:8px; }
+  .ht-status svg { flex-shrink:0; filter:drop-shadow(0 0 5px currentColor); }
+  .m svg, .meta svg, .tags svg { vertical-align:-2px; }
   @media (max-width:720px) {
     .ht-top { padding:calc(14px + env(safe-area-inset-top)) 14px 0; }
     .ht-main { padding:12px 14px calc(50px + env(safe-area-inset-bottom)); }
@@ -193,6 +196,16 @@ export const css = `
     .ht-link.with-icon { border:1px solid var(--line); background:var(--card); width:32px; height:32px; padding:0; justify-content:center; }
     .csv-grid { grid-template-columns:1fr; }
     .modal { padding:18px 16px; }
+    .ht-tools { width:100%; }
+    .tscroll { margin:0; padding:0; overflow:visible; }
+    table.t, .t tbody, .t tr, .t td { display:block; }
+    .t thead { display:none; }
+    .t tr { border:1px solid var(--line); border-radius:12px; padding:4px 12px; margin:8px 0; background:var(--field); }
+    .t td { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid var(--line2); text-align:right; }
+    .t td:last-child { border-bottom:0; justify-content:flex-end; }
+    .t td::before { content:attr(data-label); color:var(--mute); font-size:12px; flex-shrink:0; text-align:left; }
+    .t td:last-child::before { content:none; }
+    .t td input, .t td select { width:auto !important; max-width:62%; text-align:right; }
     .ht-nav h2 { font-size:17px; }
   }
 `;

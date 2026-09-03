@@ -1,10 +1,8 @@
-import { useState, useRef } from "react";
-import Papa from "papaparse";
-import { iso, today, uid, now, mealsOn, normDate, logged, adherence, testingOn, fmtShort } from "../lib/utils.js";
+import { useState } from "react";
+import { iso, today, mealsOn, logged, adherence, testingOn, fmtShort } from "../lib/utils.js";
 import { useNarrow } from "../lib/useNarrow.js";
-import Modal from "./Modal.jsx";
-import CsvExample from "./CsvExample.jsx";
-import { Upload } from "./Icons.jsx";
+import PlanImport from "./PlanImport.jsx";
+import { Upload, Trash, Flask } from "./Icons.jsx";
 
 // The small facts shown for one day, shared by the desktop grid cell and the
 // phone list row so both always say the same thing.
@@ -17,7 +15,7 @@ function DayBits({ data, e, ds }) {
       {a && ds <= today() ? <span className="m" style={{ color: a.taken === a.due ? "var(--acc-ink)" : a.taken === 0 ? "var(--bad)" : undefined }}>{a.taken}/{a.due} taken</span> : null}
       {e?.flare && <span className="f">flare {e.severity}</span>}
       {e?.activity && e.activity !== "rest" && <span className="m">{e.activity}</span>}
-      {t && <span className="m" style={{ color: "var(--acc-ink)" }}>▪ {t}</span>}
+      {t && <span className="m" style={{ color: "var(--acc-ink)" }}><Flask size={11} /> {t}</span>}
       {mo && ds <= today() ? <span className="m" style={{ color: mo.eaten === mo.planned ? "var(--acc-ink)" : undefined }}>{mo.eaten}/{mo.planned} meals</span> : mo ? <span className="m">{mo.planned} planned</span> : null}
       {(e?.extras || []).length > 0 && <span className="m">+{e.extras.length}</span>}
     </>
@@ -26,17 +24,13 @@ function DayBits({ data, e, ds }) {
 
 export default function Month({ data, save, date, setDate, goDay }) {
   const narrow = useNarrow();
-  const fileRef = useRef();
-  const woRef = useRef();
   const [msg, setMsg] = useState("");
-  const [menu, setMenu] = useState(null);
+  const [menu, setMenu] = useState(null); // "import" | "clear" | null
   const [y, m] = date.split("-").map(Number);
   const first = new Date(y, m - 1, 1);
   const days = new Date(y, m, 0).getDate();
   const cells = [...Array(first.getDay()).fill(null), ...Array.from({ length: days }, (_, i) => i + 1)];
   const byDate = Object.fromEntries(data.entries.map((e) => [e.date, e]));
-  const mealsBy = {};
-  data.meals.forEach((r) => { (mealsBy[r.date] ||= []).push(r); });
   const shift = (n) => setDate(iso(new Date(y, m - 1 + n, 1)));
 
   const hasMeals = data.meals.length > 0;
@@ -50,40 +44,6 @@ export default function Month({ data, save, date, setDate, goDay }) {
     setMsg(what === "both" ? "Both plans removed. Your logged days are untouched." : `${what === "meals" ? "Meal" : "Workout"} plan removed. Your logged days are untouched.`);
   };
 
-  const importWorkouts = (file) => {
-    Papa.parse(file, { header: true, skipEmptyLines: true, transformHeader: (h) => h.trim().toLowerCase(), complete: (res) => {
-      const cols = Object.keys(res.data[0] || {});
-      if (!cols.includes("date")) { setMsg(`Couldn't find a "date" column. Found: ${cols.join(", ") || "nothing"}. Needs date, workout, details.`); return; }
-      const bad = [];
-      const rows = res.data.map((r) => {
-        const d = r.date ? normDate(r.date) : null;
-        if (r.date && !d) bad.push(r.date);
-        return d && (r.workout || r.details) ? { id: uid(), updatedAt: now(), date: d, workout: (r.workout || "workout").trim(), details: (r.details || "").trim() } : null;
-      }).filter(Boolean);
-      if (!rows.length) { setMsg(bad.length ? `Couldn't read the dates (e.g. "${bad[0]}"). Use YYYY-MM-DD.` : "No usable rows. Each row needs a date and a workout."); return; }
-      const dates = new Set(rows.map((r) => r.date));
-      save({ ...data, workouts: [...(data.workouts || []).filter((x) => !dates.has(x.date)), ...rows] });
-      setMsg(`Loaded ${rows.length} workouts across ${dates.size} days${bad.length ? `, skipped ${bad.length} unreadable` : ""}.`);
-    } });
-  };
-
-  const importCSV = (file) => {
-    Papa.parse(file, { header: true, skipEmptyLines: true, transformHeader: (h) => h.trim().toLowerCase(), complete: (res) => {
-      const cols = Object.keys(res.data[0] || {});
-      if (!cols.includes("date")) { setMsg(`Couldn't find a "date" column. Found: ${cols.join(", ") || "nothing"}. Needs date, meal, items.`); return; }
-      const bad = [];
-      const rows = res.data.map((r) => {
-        const d = r.date ? normDate(r.date) : null;
-        if (r.date && !d) bad.push(r.date);
-        return d && (r.meal || r.items) ? { id: uid(), updatedAt: now(), date: d, meal: (r.meal || "meal").trim(), items: (r.items || "").trim() } : null;
-      }).filter(Boolean);
-      if (!rows.length) { setMsg(bad.length ? `Couldn't read the dates (e.g. "${bad[0]}"). Use YYYY-MM-DD.` : "No usable rows. Each row needs a date and a meal or items."); return; }
-      const dates = new Set(rows.map((r) => r.date));
-      save({ ...data, meals: [...data.meals.filter((x) => !dates.has(x.date)), ...rows] });
-      setMsg(`Loaded ${rows.length} meals across ${dates.size} days${bad.length ? `, skipped ${bad.length} row${bad.length>1?"s":""} with unreadable dates` : ""}. Jump to a date to see them.`);
-    } });
-  };
-
   return (
     <>
       <div className="ht-nav">
@@ -92,41 +52,20 @@ export default function Month({ data, save, date, setDate, goDay }) {
         {date.slice(0,7) !== today().slice(0,7) && <button className="today" onClick={() => setDate(today())}>This month</button>}
         <h2>{first.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</h2>
         <span className="ht-spacer" />
-        <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={(e) => { if (e.target.files[0]) importCSV(e.target.files[0]); e.target.value = ""; }} />
-        <input ref={woRef} type="file" accept=".csv" style={{ display: "none" }} onChange={(e) => { if (e.target.files[0]) importWorkouts(e.target.files[0]); e.target.value = ""; }} />
-        <button className="btn ghost xs" onClick={() => setMenu("import")} aria-haspopup="dialog">
-          <Upload size={13} /> Import
-        </button>
-        {menu === "import" && (
-          <Modal title="Import a plan" onClose={() => setMenu(null)}>
-            <p className="hint" style={{ marginTop: 0 }}>A CSV with a header row. Dates as YYYY-MM-DD. Importing a date that already has a plan replaces that day; what you've logged is never touched.</p>
-            <div className="csv-grid">
-              <div>
-                <h3>Meal plan</h3>
-                <CsvExample label="meal-plan-csv" columns={["date", "meal", "items"]} rows={[["2026-09-08", "Breakfast", "Eggs, spinach"], ["2026-09-08", "Lunch", "Chicken, rice"], ["2026-09-09", "Breakfast", "Oats, blueberries"]]} />
-                <button className="btn" onClick={() => { setMenu(null); fileRef.current.click(); }}>Choose meal CSV</button>
-              </div>
-              <div>
-                <h3>Workout plan</h3>
-                <CsvExample label="workout-plan-csv" columns={["date", "workout", "details"]} rows={[["2026-09-08", "Walk", "30 min easy"], ["2026-09-09", "Rest", ""], ["2026-09-10", "Strength", "Upper, light"]]} />
-                <button className="btn" onClick={() => { setMenu(null); woRef.current.click(); }}>Choose workout CSV</button>
-              </div>
-            </div>
-          </Modal>
-        )}
-        <div className="menu-wrap">
-          <button className="btn ghost xs" onClick={() => setMenu(menu === "clear" ? null : "clear")} disabled={!hasMeals && !hasWo} aria-expanded={menu === "clear"}>
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M2.75 4.5h10.5M6.25 4.5V3.25a.75.75 0 0 1 .75-.75h2a.75.75 0 0 1 .75.75V4.5M4 4.5l.6 8.1a1 1 0 0 0 1 .9h4.8a1 1 0 0 0 1-.9l.6-8.1" /></svg>
-            Remove plan
-          </button>
-          {menu === "clear" && <div className="menu">
-            {hasMeals && <button onClick={() => clearPlan("meals")}>Meal plan<small>{data.meals.length} meals · what you logged is kept</small></button>}
-            {hasWo && <button onClick={() => clearPlan("workouts")}>Workout plan<small>{data.workouts.length} workouts · what you logged is kept</small></button>}
-            {hasMeals && hasWo && <button onClick={() => clearPlan("both")}>Both<small>clears every imported plan</small></button>}
-            <button className="cancel" onClick={() => setMenu(null)}>Cancel</button>
-          </div>}
+        <div className="ht-tools">
+          <button className="btn ghost xs" onClick={() => setMenu("import")} aria-haspopup="dialog"><Upload size={13} /> Import</button>
+          <div className="menu-wrap">
+            <button className="btn ghost xs" onClick={() => setMenu(menu === "clear" ? null : "clear")} disabled={!hasMeals && !hasWo} aria-expanded={menu === "clear"}><Trash size={13} /> Remove plan</button>
+            {menu === "clear" && <div className="menu">
+              {hasMeals && <button onClick={() => clearPlan("meals")}>Meal plan<small>{data.meals.length} meals · what you logged is kept</small></button>}
+              {hasWo && <button onClick={() => clearPlan("workouts")}>Workout plan<small>{data.workouts.length} workouts · what you logged is kept</small></button>}
+              {hasMeals && hasWo && <button onClick={() => clearPlan("both")}>Both<small>clears every imported plan</small></button>}
+              <button className="cancel" onClick={() => setMenu(null)}>Cancel</button>
+            </div>}
+          </div>
         </div>
       </div>
+      <PlanImport data={data} save={save} open={menu === "import"} onClose={() => setMenu(null)} onMessage={setMsg} />
       {msg && <p className="hint" style={{ marginBottom: 10 }}>{msg}</p>}
       {narrow ? (
         // Phone: seven columns don't survive a 375px screen. One row per day instead.
@@ -160,8 +99,7 @@ export default function Month({ data, save, date, setDate, goDay }) {
           })}
         </div>
       )}
-      <p className="hint" style={{ marginTop: 12 }}>Big number is energy, small is inflammation. ▪ marks a day inside a test window. Meals show eaten/planned, workouts as done/planned. Meal CSV: date, meal, items. Workout CSV: date, workout, details.</p>
+      <p className="hint" style={{ marginTop: 12 }}>Big number is energy, small is inflammation. The flask marks a day inside a test window. Meals show eaten/planned, workouts as done/planned.</p>
     </>
   );
 }
-
