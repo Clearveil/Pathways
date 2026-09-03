@@ -4,7 +4,7 @@ import { today, logged } from "../lib/utils.js";
 import { buildInsights } from "../lib/insights.js";
 
 export default function Trends({ data, dark }) {
-  const c = dark ? { ink:"#ECECEC", mute:"#7C7C7C", grid:"#262626", card:"#1E1E1E", line:"#2E2E2E", acc:"#6F6688", bad:"#E08A7C", disc:"#555" } : { ink:"#161616", mute:"#8C8C8C", grid:"#EFEFEF", card:"#FFFFFF", line:"#E4E4E4", acc:"#6B6480", bad:"#9A3B2E", disc:"#BDBDBD" };
+  const c = dark ? { ink:"#ECECEC", mute:"#7C7C7C", grid:"#262626", card:"#1E1E1E", line:"#2E2E2E", acc:"#D9D9D9", bad:"#E08A7C", disc:"#555" } : { ink:"#161616", mute:"#8C8C8C", grid:"#EFEFEF", card:"#FFFFFF", line:"#E4E4E4", acc:"#1C1C1C", bad:"#9A3B2E", disc:"#BDBDBD" };
   const rows = data.entries.filter(logged).map((e) => ({ date: e.date, energy: e.energy, inflammation: e.inflammation ?? null, flare: e.flare ? e.severity : null }));
   const windows = data.interventions.filter((i) => i.start && i.status !== "baseline").map((i) => ({ ...i, end: i.end || today() }));
   const fill = { testing: c.acc, established: c.acc, discontinued: c.disc };

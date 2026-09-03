@@ -1,14 +1,30 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { today, EMPTY, now, migrate } from "./lib/utils.js";
+import { supabase } from "./lib/supabase.js";
+import { today, EMPTY, migrate } from "./lib/utils.js";
 import { store } from "./lib/store.js";
 import { css } from "./styles.js";
+import Auth from "./components/Auth.jsx";
 import Day from "./components/Day.jsx";
 import Week from "./components/Week.jsx";
 import Month from "./components/Month.jsx";
 import Library from "./components/Library.jsx";
 import Trends from "./components/Trends.jsx";
 
-export default function HealthTracker() {
+// The gate. Nothing below renders until Supabase says who is signed in.
+export default function App() {
+  const [session, setSession] = useState(undefined); // undefined = still checking
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+  if (session === undefined) return <div className="ht" style={{ padding: 30, color: "#8C8C8C" }}>Opening Pathways…</div>;
+  if (!session) return <Auth />;
+  // key= remounts the tracker if the user changes, so no state leaks between accounts.
+  return <HealthTracker key={session.user.id} session={session} />;
+}
+
+function HealthTracker({ session }) {
   const [data, setData] = useState(EMPTY);
   const [loaded, setLoaded] = useState(false);
   const [view, setView] = useState("day");
@@ -20,10 +36,8 @@ export default function HealthTracker() {
   useEffect(() => {
     (async () => {
       try { if ((await store.pref("theme")) === "dark") setDark(true); } catch (e) {}
-      try {
-        setStorageOk(!!(await store.pref("probe", String(Date.now()))));
-      } catch (e) { setStorageOk(false); }
-      try { const d = await store.load(); if (d) setData(d); } catch (e) {}
+      try { const d = await store.load(); if (d) setData(d); setStorageOk(true); }
+      catch (e) { console.error(e); setStorageOk(false); }
       setLoaded(true);
     })();
   }, []);
@@ -33,7 +47,7 @@ export default function HealthTracker() {
     try {
       await store.saveAll(next);
       setStorageOk(true); setMsg("Saved"); setTimeout(() => setMsg(""), 1200);
-    } catch (e) { setStorageOk(false); setMsg("Not saved — storage isn't available here"); }
+    } catch (e) { setStorageOk(false); setMsg(`Not saved — ${e.message || "database unreachable"}`); }
   };
 
   const openWindow = useMemo(() => {
@@ -68,6 +82,7 @@ export default function HealthTracker() {
           foods: merge(data.foods, d.foods || [], "id"),
           interventions: merge(data.interventions, d.interventions || [], "id"),
           meals: d.meals?.length ? d.meals : data.meals,
+          workouts: d.workouts?.length ? d.workouts : (data.workouts || []),
         });
         setMsg(`Imported ${(d.entries || []).length} days`);
       } catch (e) { setMsg("That file doesn't look like an export from this app"); }
@@ -76,6 +91,7 @@ export default function HealthTracker() {
   };
   const goDay = (d) => { setDate(d); setView("day"); };
   const toggleTheme = async () => { const n = !dark; setDark(n); try { await store.pref("theme", n ? "dark" : "light"); } catch (e) {} };
+  const signOut = () => supabase.auth.signOut();
 
   if (!loaded) return <div className="ht" style={{ padding: 30, color: "#8C8C8C" }}>Opening Pathways…</div>;
 
@@ -83,7 +99,7 @@ export default function HealthTracker() {
     <div className={"ht" + (dark ? " dark" : "")}>
       <style>{css}</style>
       <header className="ht-top">
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}><span className="brand">Pathways</span><h1>Health log</h1></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><img className="brand-logo" src="/logo.png" alt="" /><span className="brand">Pathways</span><h1>Health log</h1></div>
         <div className="ht-tabs">
           {[["day","Day"],["week","Week"],["month","Month"],["library","Foods & supplements"],["trends","Trends & insights"]].map(([k,l]) => (
             <button key={k} className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>
@@ -91,11 +107,12 @@ export default function HealthTracker() {
         </div>
         <span className="ht-spacer" />
         {msg && <span className="hint">{msg}</span>}
-        {storageOk === false && !msg && <span className="hint" style={{ color: "var(--bad)" }}>Storage unavailable — data won't persist. Export before you leave.</span>}
-        {storageOk === true && !msg && <span className="hint">Storage connected</span>}
+        {storageOk === false && !msg && <span className="hint" style={{ color: "var(--bad)" }}>Can't reach the database — changes won't save. Export before you leave.</span>}
+        {storageOk === true && !msg && <span className="hint">Connected</span>}
         <input ref={importRef} type="file" accept=".json" style={{ display: "none" }} onChange={(e) => { if (e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ""; }} />
         <button className="ht-link" onClick={() => importRef.current.click()}>Import</button>
         <button className="ht-link" onClick={exportJSON}>Export</button>
+        <button className="ht-link" onClick={signOut} title={session.user.email}>Sign out</button>
         <button className="theme" onClick={toggleTheme} title={dark ? "Light mode" : "Dark mode"}>{dark ? "☀" : "☾"}</button>
       </header>
       <main className="ht-main">
@@ -113,4 +130,3 @@ export default function HealthTracker() {
     </div>
   );
 }
-

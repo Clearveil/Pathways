@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import Papa from "papaparse";
-import { iso, today, mealsOn, normDate, logged, adherence, testingOn } from "../lib/utils.js";
+import { iso, today, uid, now, mealsOn, normDate, logged, adherence, testingOn } from "../lib/utils.js";
 
 export default function Month({ data, save, date, setDate, goDay }) {
   const fileRef = useRef();
@@ -35,7 +35,7 @@ export default function Month({ data, save, date, setDate, goDay }) {
       const rows = res.data.map((r) => {
         const d = r.date ? normDate(r.date) : null;
         if (r.date && !d) bad.push(r.date);
-        return d && (r.workout || r.details) ? { date: d, workout: (r.workout || "workout").trim(), details: (r.details || "").trim() } : null;
+        return d && (r.workout || r.details) ? { id: uid(), updatedAt: now(), date: d, workout: (r.workout || "workout").trim(), details: (r.details || "").trim() } : null;
       }).filter(Boolean);
       if (!rows.length) { setMsg(bad.length ? `Couldn't read the dates (e.g. "${bad[0]}"). Use YYYY-MM-DD.` : "No usable rows. Each row needs a date and a workout."); return; }
       const dates = new Set(rows.map((r) => r.date));
@@ -52,7 +52,7 @@ export default function Month({ data, save, date, setDate, goDay }) {
       const rows = res.data.map((r) => {
         const d = r.date ? normDate(r.date) : null;
         if (r.date && !d) bad.push(r.date);
-        return d && (r.meal || r.items) ? { date: d, meal: (r.meal || "meal").trim(), items: (r.items || "").trim() } : null;
+        return d && (r.meal || r.items) ? { id: uid(), updatedAt: now(), date: d, meal: (r.meal || "meal").trim(), items: (r.items || "").trim() } : null;
       }).filter(Boolean);
       if (!rows.length) { setMsg(bad.length ? `Couldn't read the dates (e.g. "${bad[0]}"). Use YYYY-MM-DD.` : "No usable rows. Each row needs a date and a meal or items."); return; }
       const dates = new Set(rows.map((r) => r.date));

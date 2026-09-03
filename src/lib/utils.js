@@ -5,7 +5,7 @@ export const KEY = "health-tracker-v1";
 export const iso = (d) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`; };
 export const today = () => iso(new Date());
 export const addDays = (ds, n) => { const d = new Date(ds + "T12:00:00"); d.setDate(d.getDate() + n); return iso(d); };
-export const uid = () => Math.random().toString(36).slice(2, 9);
+export const uid = () => (globalThis.crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 9));
 export const SCHEMA = 2;
 export const EMPTY = { schema: SCHEMA, entries: [], foods: [], interventions: [], meals: [], workouts: [] };
 export const now = () => new Date().toISOString();
