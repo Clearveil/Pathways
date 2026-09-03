@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { supabase, LOCAL_ONLY } from "./lib/supabase.js";
+import { supabase, LOCAL_ONLY, CONFIG_ERROR } from "./lib/supabase.js";
 import { today, EMPTY, migrate } from "./lib/utils.js";
 import { store } from "./lib/store.js";
 import { css } from "./styles.js";
@@ -15,10 +15,12 @@ export default function App() {
   const [session, setSession] = useState(undefined); // undefined = still checking
   useEffect(() => {
     if (LOCAL_ONLY) { setSession({ user: { id: "local", email: "browser-only mode" } }); return; }
+    if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
   }, []);
+  if (CONFIG_ERROR) return <div className="ht" style={{ padding: 30, maxWidth: 560, lineHeight: 1.5 }}><h2 style={{ marginTop: 0 }}>Pathways can't start</h2><p>{CONFIG_ERROR}</p></div>;
   if (session === undefined) return <div className="ht" style={{ padding: 30, color: "#8C8C8C" }}>Opening Pathways…</div>;
   if (!session) return <Auth />;
   // key= remounts the tracker if the user changes, so no state leaks between accounts.
