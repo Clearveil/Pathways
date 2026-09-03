@@ -16,7 +16,7 @@ export const css = `
   .ht { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; color:var(--ink); background:var(--bg); min-height:100vh; -webkit-font-smoothing:antialiased; }
   .ht * { box-sizing:border-box; }
   .ht h1,.ht h2,.ht h3 { font-family:inherit; font-weight:500; letter-spacing:-.01em; }
-  .ht-top { display:flex; align-items:center; gap:10px; padding:18px 24px 0; flex-wrap:wrap; }
+  .ht-top { display:flex; align-items:center; gap:10px; padding:calc(18px + env(safe-area-inset-top)) 24px 0; flex-wrap:wrap; }
   .ht-top h1 { font-size:22px; margin:0; letter-spacing:-.01em; }
   .brand { font-size:12px; color:var(--mute); letter-spacing:.04em; text-transform:uppercase; }
   .ht-tabs { display:flex; gap:2px; background:var(--bg2); padding:3px; border-radius:10px; border:1px solid var(--line2); }
@@ -148,8 +148,8 @@ export const css = `
   .mrow .tags { display:flex; flex-wrap:wrap; gap:3px 10px; flex:1; font-size:11px; color:var(--mute); }
   .mrow .f { color:var(--bad); }
   @media (max-width:720px) {
-    .ht-top { padding:14px 14px 0; }
-    .ht-main { padding:12px 14px 50px; }
+    .ht-top { padding:calc(14px + env(safe-area-inset-top)) 14px 0; }
+    .ht-main { padding:12px 14px calc(50px + env(safe-area-inset-bottom)); }
     .ht-day { grid-template-columns:1fr; }
     .week { grid-template-columns:repeat(2,1fr); }
     .cell { min-height:110px; }
