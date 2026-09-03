@@ -9,6 +9,9 @@ import Week from "./components/Week.jsx";
 import Month from "./components/Month.jsx";
 import Library from "./components/Library.jsx";
 import Trends from "./components/Trends.jsx";
+import Menu from "./components/Menu.jsx";
+import Modal from "./components/Modal.jsx";
+import { Share, Sun, Moon, User, CloudCheck, CloudOff, Check, Drive, Upload, Download } from "./components/Icons.jsx";
 
 // The gate. Nothing below renders until Supabase says who is signed in.
 export default function App() {
@@ -27,6 +30,8 @@ export default function App() {
   return <HealthTracker key={session.user.id} session={session} />;
 }
 
+const PLAN_LABEL = { free: "Free", pro: "Pro" };
+
 function HealthTracker({ session }) {
   const [data, setData] = useState(EMPTY);
   const [loaded, setLoaded] = useState(false);
@@ -35,12 +40,15 @@ function HealthTracker({ session }) {
   const [msg, setMsg] = useState("");
   const [dark, setDark] = useState(false);
   const [storageOk, setStorageOk] = useState(null);
+  const [plan, setPlan] = useState("free");
+  const [showPlan, setShowPlan] = useState(false);
 
   useEffect(() => {
     (async () => {
       try { if ((await store.pref("theme")) === "dark") setDark(true); } catch (e) {}
       try { const d = await store.load(); if (d) setData(d); setStorageOk(true); }
       catch (e) { console.error(e); setStorageOk(false); }
+      try { const p = await store.profile(); if (p?.plan) setPlan(p.plan); } catch (e) {}
       setLoaded(true);
     })();
   }, []);
@@ -92,32 +100,54 @@ function HealthTracker({ session }) {
     };
     rd.readAsText(file);
   };
+  const pickImport = () => importRef.current.click();
   const goDay = (d) => { setDate(d); setView("day"); };
   const toggleTheme = async () => { const n = !dark; setDark(n); try { await store.pref("theme", n ? "dark" : "light"); } catch (e) {} };
   const signOut = () => { if (supabase) supabase.auth.signOut(); };
 
   if (!loaded) return <div className="ht" style={{ padding: 30, color: "#8C8C8C" }}>Opening Pathways…</div>;
 
+  // Connection state, as text on desktop and as an icon on phones.
+  const statusText = storageOk === false ? "Can't reach the database — changes won't save. Export before you leave." : LOCAL_ONLY ? "Browser-only mode" : "Connected";
+  const StatusIcon = storageOk === false ? CloudOff : msg === "Saved" ? Check : LOCAL_ONLY ? Drive : CloudCheck;
+
   return (
     <div className={"ht" + (dark ? " dark" : "")}>
       <style>{css}</style>
       <header className="ht-top">
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><img className="brand-logo" src="/logo.png" alt="" /><span className="brand">Pathways</span><h1>Health log</h1></div>
+        <div className="ht-brand">
+          <img className="brand-logo" src="/logo.png" alt="" />
+          <span className="brand">Pathways</span>
+          <h1>Health log</h1>
+        </div>
         <div className="ht-tabs">
           {[["day","Day","Day"],["week","Week","Week"],["month","Month","Month"],["library","Foods & supplements","Foods"],["trends","Trends & insights","Trends"]].map(([k,l,s]) => (
             <button key={k} className={view === k ? "on" : ""} onClick={() => setView(k)}><span className="full">{l}</span><span className="short">{s}</span></button>
           ))}
         </div>
         <span className="ht-spacer" />
-        {msg && <span className="hint">{msg}</span>}
-        {storageOk === false && !msg && <span className="hint" style={{ color: "var(--bad)" }}>Can't reach the database — changes won't save. Export before you leave.</span>}
-        {storageOk === true && !msg && <span className="hint">{LOCAL_ONLY ? "Browser-only mode" : "Connected"}</span>}
-        <input ref={importRef} type="file" accept=".json" style={{ display: "none" }} onChange={(e) => { if (e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ""; }} />
-        <button className="ht-link" onClick={() => importRef.current.click()}>Import</button>
-        <button className="ht-link" onClick={exportJSON}>Export</button>
-        {!LOCAL_ONLY && <button className="ht-link" onClick={signOut} title={session.user.email}>Sign out</button>}
-        <button className="theme" onClick={toggleTheme} title={dark ? "Light mode" : "Dark mode"}>{dark ? "☀" : "☾"}</button>
+        <div className="ht-actions">
+          {msg ? <span className="hint desk-only">{msg}</span>
+               : storageOk !== null && <span className="hint desk-only" style={storageOk === false ? { color: "var(--bad)" } : undefined}>{statusText}</span>}
+          {storageOk !== null && <span className={"status-icon mob-only" + (storageOk === false ? " bad" : "")} title={msg || statusText}><StatusIcon /></span>}
+          <input ref={importRef} type="file" accept=".json" style={{ display: "none" }} onChange={(e) => { if (e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ""; }} />
+          <button className="ht-link desk-only" onClick={pickImport}>Import</button>
+          <button className="ht-link desk-only" onClick={exportJSON}>Export</button>
+          <Menu className="mob-only" icon={<Share />} label="Import or export">
+            <button onClick={exportJSON}><Download /> Export everything<small>A JSON file of all your data</small></button>
+            <button onClick={pickImport}><Upload /> Import<small>A Pathways export (.json)</small></button>
+          </Menu>
+          <button className="icon-btn" onClick={toggleTheme} title={dark ? "Light mode" : "Dark mode"} aria-label={dark ? "Light mode" : "Dark mode"}>{dark ? <Sun /> : <Moon />}</button>
+          {!LOCAL_ONLY && (
+            <Menu icon={<User />} text="Account" label="Account">
+              <div className="menu-head">{session.user.email}<small>{PLAN_LABEL[plan] || plan} plan</small></div>
+              <button onClick={() => setShowPlan(true)}>View plan</button>
+              <button onClick={signOut}>Sign out</button>
+            </Menu>
+          )}
+        </div>
       </header>
+      {msg && <p className="ht-msg mob-only">{msg}</p>}
       <main className="ht-main">
         <div className={"ht-status" + (openWindow ? "" : " clear")}>
           <span className="dot" />
@@ -130,6 +160,12 @@ function HealthTracker({ session }) {
         {view === "library" && <Library data={data} save={save} openWindow={openWindow} />}
         {view === "trends" && <Trends data={data} dark={dark} />}
       </main>
+      {showPlan && (
+        <Modal title="Your plan" onClose={() => setShowPlan(false)}>
+          <p style={{ margin: "0 0 6px" }}><b>{PLAN_LABEL[plan] || plan}</b> · {session.user.email}</p>
+          <p className="hint" style={{ margin: 0 }}>Pathways is free while it's being built. When billing turns on, it will be $0.99 per person per month. Nothing changes for you until you're asked.</p>
+        </Modal>
+      )}
     </div>
   );
 }

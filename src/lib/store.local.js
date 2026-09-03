@@ -12,6 +12,7 @@ export const localStore = {
     localStorage.setItem(KEY, JSON.stringify(data));
     return true;
   },
+  async profile() { return { plan: "free" }; },
   async pref(k, v) {
     if (v === undefined) return localStorage.getItem(`${KEY}:${k}`);
     localStorage.setItem(`${KEY}:${k}`, v);

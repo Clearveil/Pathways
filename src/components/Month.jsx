@@ -2,6 +2,9 @@ import { useState, useRef } from "react";
 import Papa from "papaparse";
 import { iso, today, uid, now, mealsOn, normDate, logged, adherence, testingOn, fmtShort } from "../lib/utils.js";
 import { useNarrow } from "../lib/useNarrow.js";
+import Modal from "./Modal.jsx";
+import CsvExample from "./CsvExample.jsx";
+import { Upload } from "./Icons.jsx";
 
 // The small facts shown for one day, shared by the desktop grid cell and the
 // phone list row so both always say the same thing.
@@ -91,16 +94,26 @@ export default function Month({ data, save, date, setDate, goDay }) {
         <span className="ht-spacer" />
         <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={(e) => { if (e.target.files[0]) importCSV(e.target.files[0]); e.target.value = ""; }} />
         <input ref={woRef} type="file" accept=".csv" style={{ display: "none" }} onChange={(e) => { if (e.target.files[0]) importWorkouts(e.target.files[0]); e.target.value = ""; }} />
-        <div className="menu-wrap">
-          <button className="btn ghost xs" onClick={() => setMenu(menu === "import" ? null : "import")} aria-expanded={menu === "import"}>
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 10.5V2M8 2 4.75 5.25M8 2l3.25 3.25M2.5 10.5v2.25a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V10.5" /></svg>
-            Import
-          </button>
-          {menu === "import" && <div className="menu">
-            <button onClick={() => { setMenu(null); fileRef.current.click(); }}>Meal plan<small>date, meal, items</small></button>
-            <button onClick={() => { setMenu(null); woRef.current.click(); }}>Workout plan<small>date, workout, details</small></button>
-          </div>}
-        </div>
+        <button className="btn ghost xs" onClick={() => setMenu("import")} aria-haspopup="dialog">
+          <Upload size={13} /> Import
+        </button>
+        {menu === "import" && (
+          <Modal title="Import a plan" onClose={() => setMenu(null)}>
+            <p className="hint" style={{ marginTop: 0 }}>A CSV with a header row. Dates as YYYY-MM-DD. Importing a date that already has a plan replaces that day; what you've logged is never touched.</p>
+            <div className="csv-grid">
+              <div>
+                <h3>Meal plan</h3>
+                <CsvExample label="meal-plan-csv" columns={["date", "meal", "items"]} rows={[["2026-09-08", "Breakfast", "Eggs, spinach"], ["2026-09-08", "Lunch", "Chicken, rice"], ["2026-09-09", "Breakfast", "Oats, blueberries"]]} />
+                <button className="btn" onClick={() => { setMenu(null); fileRef.current.click(); }}>Choose meal CSV</button>
+              </div>
+              <div>
+                <h3>Workout plan</h3>
+                <CsvExample label="workout-plan-csv" columns={["date", "workout", "details"]} rows={[["2026-09-08", "Walk", "30 min easy"], ["2026-09-09", "Rest", ""], ["2026-09-10", "Strength", "Upper, light"]]} />
+                <button className="btn" onClick={() => { setMenu(null); woRef.current.click(); }}>Choose workout CSV</button>
+              </div>
+            </div>
+          </Modal>
+        )}
         <div className="menu-wrap">
           <button className="btn ghost xs" onClick={() => setMenu(menu === "clear" ? null : "clear")} disabled={!hasMeals && !hasWo} aria-expanded={menu === "clear"}>
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M2.75 4.5h10.5M6.25 4.5V3.25a.75.75 0 0 1 .75-.75h2a.75.75 0 0 1 .75.75V4.5M4 4.5l.6 8.1a1 1 0 0 0 1 .9h4.8a1 1 0 0 0 1-.9l.6-8.1" /></svg>

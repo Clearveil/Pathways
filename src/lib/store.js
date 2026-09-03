@@ -134,6 +134,13 @@ const supabaseStore = {
     return run;
   },
 
+  // The signed-in person's profile row: plan and the like.
+  async profile() {
+    const userId = await requireUser();
+    const { data } = await supabase.from("profiles").select("plan").eq("id", userId).maybeSingle();
+    return data || { plan: "free" };
+  },
+
   // Theme and the like belong to the device, not the account.
   async pref(k, v) {
     if (v === undefined) return localStorage.getItem(`${KEY}:${k}`);
