@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+
+# Secrets — never commit real keys. Copy .env.example to .env.local and fill in.
+.env
+.env.local
+.env.*.local
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
+
+# The original artifact zip — the three files it contained are committed directly
+files.zip

@@ -1,0 +1,4 @@
+/* Minimal page reset. The app carries its own styles in the .ht block
+   inside HealthTracker.jsx, so this only removes browser defaults. */
+html, body, #root { margin: 0; padding: 0; min-height: 100%; }
+body { background: #ffffff; }
