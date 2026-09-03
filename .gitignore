@@ -25,3 +25,6 @@ npm-debug.log*
 
 # The original artifact zip — the three files it contained are committed directly
 files.zip
+
+# Loose logo drops in the root; the real one lives at public/logo.png
+Logo/

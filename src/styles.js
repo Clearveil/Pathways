@@ -131,7 +131,7 @@ export const css = `
   .auth { display:flex; align-items:center; justify-content:center; padding:24px; }
   .auth .card { width:100%; max-width:380px; padding:28px 28px 22px; }
   .auth .logo { display:block; height:180px; width:auto; margin:-40px auto -34px; mix-blend-mode:multiply; filter:drop-shadow(0 0 14px var(--glow)); }
-  .ht.dark .auth .logo { filter:invert(1) drop-shadow(0 0 18px var(--glow)); mix-blend-mode:screen; }
+  .ht.dark .logo { filter:invert(1) drop-shadow(0 0 18px var(--glow)); mix-blend-mode:screen; }
   .auth h1 { font-size:22px; margin:0; text-align:center; }
   .auth .sub { text-align:center; margin:4px 0 18px; }
   .auth .btn { width:100%; margin-top:4px; }
