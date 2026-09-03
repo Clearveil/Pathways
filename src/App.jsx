@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { supabase } from "./lib/supabase.js";
+import { supabase, LOCAL_ONLY } from "./lib/supabase.js";
 import { today, EMPTY, migrate } from "./lib/utils.js";
 import { store } from "./lib/store.js";
 import { css } from "./styles.js";
@@ -14,6 +14,7 @@ import Trends from "./components/Trends.jsx";
 export default function App() {
   const [session, setSession] = useState(undefined); // undefined = still checking
   useEffect(() => {
+    if (LOCAL_ONLY) { setSession({ user: { id: "local", email: "browser-only mode" } }); return; }
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
@@ -91,7 +92,7 @@ function HealthTracker({ session }) {
   };
   const goDay = (d) => { setDate(d); setView("day"); };
   const toggleTheme = async () => { const n = !dark; setDark(n); try { await store.pref("theme", n ? "dark" : "light"); } catch (e) {} };
-  const signOut = () => supabase.auth.signOut();
+  const signOut = () => { if (supabase) supabase.auth.signOut(); };
 
   if (!loaded) return <div className="ht" style={{ padding: 30, color: "#8C8C8C" }}>Opening Pathways…</div>;
 
@@ -101,18 +102,18 @@ function HealthTracker({ session }) {
       <header className="ht-top">
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}><img className="brand-logo" src="/logo.png" alt="" /><span className="brand">Pathways</span><h1>Health log</h1></div>
         <div className="ht-tabs">
-          {[["day","Day"],["week","Week"],["month","Month"],["library","Foods & supplements"],["trends","Trends & insights"]].map(([k,l]) => (
-            <button key={k} className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>
+          {[["day","Day","Day"],["week","Week","Week"],["month","Month","Month"],["library","Foods & supplements","Foods"],["trends","Trends & insights","Trends"]].map(([k,l,s]) => (
+            <button key={k} className={view === k ? "on" : ""} onClick={() => setView(k)}><span className="full">{l}</span><span className="short">{s}</span></button>
           ))}
         </div>
         <span className="ht-spacer" />
         {msg && <span className="hint">{msg}</span>}
         {storageOk === false && !msg && <span className="hint" style={{ color: "var(--bad)" }}>Can't reach the database — changes won't save. Export before you leave.</span>}
-        {storageOk === true && !msg && <span className="hint">Connected</span>}
+        {storageOk === true && !msg && <span className="hint">{LOCAL_ONLY ? "Browser-only mode" : "Connected"}</span>}
         <input ref={importRef} type="file" accept=".json" style={{ display: "none" }} onChange={(e) => { if (e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ""; }} />
         <button className="ht-link" onClick={() => importRef.current.click()}>Import</button>
         <button className="ht-link" onClick={exportJSON}>Export</button>
-        <button className="ht-link" onClick={signOut} title={session.user.email}>Sign out</button>
+        {!LOCAL_ONLY && <button className="ht-link" onClick={signOut} title={session.user.email}>Sign out</button>}
         <button className="theme" onClick={toggleTheme} title={dark ? "Light mode" : "Dark mode"}>{dark ? "☀" : "☾"}</button>
       </header>
       <main className="ht-main">

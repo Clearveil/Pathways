@@ -52,7 +52,7 @@ function Foods({ data, save, openWindow }) {
         <button className="btn sm" onClick={add} style={{ marginBottom: 10 }}>Save food</button>
       </div>}
       {sorted.length === 0 ? <p className="empty">Nothing here yet. Start with the foods you already know are safe — that's your baseline.</p> : (
-        <table className="t"><thead><tr><th>Food</th><th>Category</th><th>Status</th><th>Confidence</th><th>Last tested</th><th></th></tr></thead>
+        <div className="tscroll"><table className="t"><thead><tr><th>Food</th><th>Category</th><th>Status</th><th>Confidence</th><th>Last tested</th><th></th></tr></thead>
           <tbody>{sorted.map((x) => (
             <tr key={x.id}>
               <td>{x.name}</td><td style={{ color: "var(--mute)" }}>{x.category || "—"}</td>
@@ -60,7 +60,7 @@ function Foods({ data, save, openWindow }) {
               <td>{x.confidence}</td><td>{x.lastTested || "—"}</td>
               <td><button className="ht-link" onClick={() => remove(x.id)}>Remove</button></td>
             </tr>
-          ))}</tbody></table>
+          ))}</tbody></table></div>
       )}
     </div>
   );
@@ -118,7 +118,7 @@ function Interventions({ data, save, openWindow }) {
         <button className="btn sm" onClick={add} style={{ marginBottom: 10 }}>Save</button>
       </div>}
       {sorted.length === 0 ? <p className="empty">Add everything you currently take as <i>baseline</i> first, so the trends chart has context.</p> : (
-        <table className="t"><thead><tr><th>On</th><th>Name</th><th>Type</th><th>Dose</th><th>Start</th><th>End</th><th>From</th><th>Status</th><th>Outcome</th><th></th></tr></thead>
+        <div className="tscroll"><table className="t"><thead><tr><th>On</th><th>Name</th><th>Type</th><th>Dose</th><th>Start</th><th>End</th><th>From</th><th>Status</th><th>Outcome</th><th></th></tr></thead>
           <tbody>{sorted.map((x) => (
             <tr key={x.id} className={isOn(x) ? "" : "off"}>
               <td><button className={"switch" + (isOn(x) ? " on" : "")} onClick={() => toggleOn(x)} title={isOn(x) ? "Taking — switch off" : "Not taking — switch on"} /></td>
@@ -129,7 +129,7 @@ function Interventions({ data, save, openWindow }) {
               <td><input value={x.outcome || ""} onChange={(e) => update(x.id, { outcome: e.target.value })} placeholder="What happened" style={{ width: 130 }} /></td>
               <td><button className="ht-link" onClick={() => remove(x.id)}>Remove</button></td>
             </tr>
-          ))}</tbody></table>
+          ))}</tbody></table></div>
       )}
     </div>
   );

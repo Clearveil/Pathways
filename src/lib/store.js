@@ -12,7 +12,8 @@
 // the last sync, plus deletes for rows that disappeared. That keeps every
 // click cheap and every data point a real row you can query.
 // ---------------------------------------------------------------------------
-import { supabase } from "./supabase.js";
+import { supabase, LOCAL_ONLY } from "./supabase.js";
+import { localStore } from "./store.local.js";
 import { KEY, EMPTY, migrate } from "./utils.js";
 
 // The app uses "" for "nothing here"; Postgres wants null. Convert at the edge.
@@ -109,7 +110,7 @@ async function sync(data) {
   return true;
 }
 
-export const store = {
+const supabaseStore = {
   async load() {
     const userId = await requireUser();
     const keys = Object.keys(TABLES);
@@ -140,3 +141,6 @@ export const store = {
     return v;
   },
 };
+
+// The boundary the rest of the app imports. One line decides which backend.
+export const store = LOCAL_ONLY ? localStore : supabaseStore;
