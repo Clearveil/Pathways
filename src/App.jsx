@@ -123,7 +123,7 @@ function HealthTracker({ session }) {
           <h1>Health log</h1>
         </div>
         <div className="ht-tabs">
-          {[["day","Day","Day"],["week","Week","Week"],["month","Month","Month"],["library","Library","Library"],["trends","Trends & insights","Trends"]].map(([k,l,s]) => (
+          {[["day","Day","Day"],["week","Week","Week"],["month","Month","Month"],["library","Index","Index"],["trends","Trends & insights","Trends"]].map(([k,l,s]) => (
             <button key={k} className={view === k ? "on" : ""} onClick={() => setView(k)}><span className="full">{l}</span><span className="short">{s}</span></button>
           ))}
         </div>

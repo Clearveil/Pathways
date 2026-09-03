@@ -101,7 +101,8 @@ export const css = `
   .mcell .e { font-size:18px; }
   .mcell .f { font-size:10px; color:var(--bad); }
   .mcell .m { font-size:10px; color:var(--mute); }
-  .lib { display:grid; grid-template-columns:1fr; gap:14px; }
+  .lib { display:grid; grid-template-columns:minmax(0,1fr); gap:14px; }
+  .lib > .card { min-width:0; }
   table.t { width:100%; border-collapse:collapse; font-size:13px; margin-top:6px; }
   .t th { text-align:left; font-weight:500; color:var(--mute); padding:6px 8px 8px 0; border-bottom:1px solid var(--line); font-size:12px; }
   .t td { padding:9px 8px 9px 0; border-bottom:1px solid var(--line2); vertical-align:top; }
@@ -168,6 +169,22 @@ export const css = `
   .ht-tools { display:flex; align-items:center; gap:8px; }
   .ht-status svg { flex-shrink:0; filter:drop-shadow(0 0 5px currentColor); }
   .m svg, .meta svg, .tags svg { vertical-align:-2px; }
+  .btn.xs .lbl { margin-left:6px; }
+  .addform { background:var(--bg2); border-radius:12px; padding:12px 14px 4px; margin:8px 0 12px; }
+  .llist { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+  .lrow { border:1px solid var(--line); border-radius:12px; background:var(--field); }
+  .lrow-head { display:flex; align-items:center; gap:10px; padding:9px 12px; cursor:pointer; user-select:none; }
+  .lrow-main { flex:1; min-width:0; overflow:hidden; }
+  .lrow-name { display:block; font-size:13px; }
+  .lrow-sub { display:block; font-size:11px; color:var(--mute); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .lrow.off .lrow-name { color:var(--mute); }
+  .lrow-body { border-top:1px solid var(--line2); padding:2px 12px 8px; }
+  .kv { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:7px 0; font-size:13px; border-bottom:1px solid var(--line2); }
+  .kv:last-of-type { border-bottom:0; }
+  .kv b { font-weight:400; font-size:12px; color:var(--mute); flex-shrink:0; }
+  .kv input, .kv select { font:inherit; font-size:13px; border:0; background:none; color:var(--ink); text-align:right; max-width:60%; padding:0; }
+  .kv input { border-bottom:1px solid var(--line); padding:2px 0; }
+  .lrow-actions { display:flex; justify-content:flex-end; gap:2px; padding-top:4px; }
   @media (max-width:720px) {
     .ht-top { padding:calc(14px + env(safe-area-inset-top)) 14px 0; }
     .ht-main { padding:12px 14px calc(50px + env(safe-area-inset-bottom)); }
@@ -182,7 +199,6 @@ export const css = `
     .ht-tabs .full { display:none; }
     .ht-tabs .short { display:inline; }
     .ht-nav { flex-wrap:wrap; }
-    .ht-nav .ht-spacer { flex-basis:100%; height:0; }
     .ht-top { gap:8px 10px; }
     .ht-brand { order:1; gap:6px; }
     .ht-brand .brand { font-size:15px; color:var(--ink); text-transform:none; letter-spacing:-.01em; font-weight:500; }
@@ -196,16 +212,9 @@ export const css = `
     .ht-link.with-icon { border:1px solid var(--line); background:var(--card); width:32px; height:32px; padding:0; justify-content:center; }
     .csv-grid { grid-template-columns:1fr; }
     .modal { padding:18px 16px; }
-    .ht-tools { width:100%; }
-    .tscroll { margin:0; padding:0; overflow:visible; }
-    table.t, .t tbody, .t tr, .t td { display:block; }
-    .t thead { display:none; }
-    .t tr { border:1px solid var(--line); border-radius:12px; padding:4px 12px; margin:8px 0; background:var(--field); }
-    .t td { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid var(--line2); text-align:right; }
-    .t td:last-child { border-bottom:0; justify-content:flex-end; }
-    .t td::before { content:attr(data-label); color:var(--mute); font-size:12px; flex-shrink:0; text-align:left; }
-    .t td:last-child::before { content:none; }
-    .t td input, .t td select { width:auto !important; max-width:62%; text-align:right; }
-    .ht-nav h2 { font-size:17px; }
+    .ht-nav h2 { font-size:16px; }
+    .ht-tools { width:auto; margin-left:auto; }
+    .ht-tools .btn.xs { width:32px; height:30px; padding:0; justify-content:center; }
+    .ht-tools .btn.xs .lbl { display:none; }
   }
 `;

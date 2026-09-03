@@ -53,9 +53,9 @@ export default function Month({ data, save, date, setDate, goDay }) {
         <h2>{first.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</h2>
         <span className="ht-spacer" />
         <div className="ht-tools">
-          <button className="btn ghost xs" onClick={() => setMenu("import")} aria-haspopup="dialog"><Upload size={13} /> Import</button>
+          <button className="btn ghost xs" onClick={() => setMenu("import")} aria-haspopup="dialog" title="Import a plan"><Upload size={13} /><span className="lbl">Import</span></button>
           <div className="menu-wrap">
-            <button className="btn ghost xs" onClick={() => setMenu(menu === "clear" ? null : "clear")} disabled={!hasMeals && !hasWo} aria-expanded={menu === "clear"}><Trash size={13} /> Remove plan</button>
+            <button className="btn ghost xs" onClick={() => setMenu(menu === "clear" ? null : "clear")} disabled={!hasMeals && !hasWo} aria-expanded={menu === "clear"} title="Remove plan"><Trash size={13} /><span className="lbl">Remove plan</span></button>
             {menu === "clear" && <div className="menu">
               {hasMeals && <button onClick={() => clearPlan("meals")}>Meal plan<small>{data.meals.length} meals · what you logged is kept</small></button>}
               {hasWo && <button onClick={() => clearPlan("workouts")}>Workout plan<small>{data.workouts.length} workouts · what you logged is kept</small></button>}
