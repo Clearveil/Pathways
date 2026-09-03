@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "pathways-dev",
-      "runtimeExecutable": "C:\Users\zazch\AppData\Local\Programs\nodejs\node.exe",
+      "runtimeExecutable": "C:/Users/zazch/AppData/Local/Programs/nodejs/node.exe",
       "runtimeArgs": ["node_modules/vite/bin/vite.js", "--port", "5173", "--strictPort"],
       "port": 5173
     }
