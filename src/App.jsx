@@ -44,6 +44,7 @@ function HealthTracker({ session }) {
   const [plan, setPlan] = useState("free");
   const [showPlan, setShowPlan] = useState(false);
   const [planImport, setPlanImport] = useState(false);
+  const [dataModal, setDataModal] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -133,8 +134,8 @@ function HealthTracker({ session }) {
                : storageOk !== null && <span className="hint desk-only" style={storageOk === false ? { color: "var(--bad)" } : undefined}>{statusText}</span>}
           {storageOk !== null && <span className={"status-icon mob-only" + (storageOk === false ? " bad" : "")} title={msg || statusText}><StatusIcon /></span>}
           <input ref={importRef} type="file" accept=".json" style={{ display: "none" }} onChange={(e) => { if (e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ""; }} />
-          <button className="ht-link desk-only" onClick={pickImport}>Import</button>
-          <button className="ht-link desk-only" onClick={exportJSON}>Export</button>
+          <button className="ht-link desk-only" onClick={() => setDataModal(true)}>Import</button>
+          <button className="ht-link desk-only" onClick={() => setDataModal(true)}>Export</button>
           <Menu className="mob-only" icon={<Share />} label="Import or export">
             <button onClick={exportJSON}><Download /> Export everything<small>A JSON backup of all your data</small></button>
             <button onClick={() => setPlanImport(true)}><Upload /> Import a meal or workout plan<small>CSV, with a guide</small></button>
@@ -164,6 +165,22 @@ function HealthTracker({ session }) {
         {view === "trends" && <Trends data={data} dark={dark} />}
       </main>
       <PlanImport data={data} save={save} open={planImport} onClose={() => setPlanImport(false)} onMessage={setMsg} />
+      {dataModal && (
+        <Modal title="Your data" onClose={() => setDataModal(false)}>
+          <div className="csv-grid">
+            <div>
+              <h3><Download size={14} /> Export</h3>
+              <p className="hint">Download everything, every day, food, supplement, and plan, as one JSON file. Keep it anywhere you like; it's yours, and it's the whole record. Do this whenever you want a copy outside the app.</p>
+              <button className="btn" onClick={() => { exportJSON(); setDataModal(false); }}>Download backup</button>
+            </div>
+            <div>
+              <h3><Upload size={14} /> Import</h3>
+              <p className="hint">Bring in a Pathways backup: from another device, another account, or an older export. Days are matched by date and the newer version of each wins, so nothing you've logged since is lost.</p>
+              <button className="btn" onClick={() => { setDataModal(false); pickImport(); }}>Choose backup file</button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {showPlan && (
         <Modal title="Your plan" onClose={() => setShowPlan(false)}>
           <p style={{ margin: "0 0 6px" }}><b>{PLAN_LABEL[plan] || plan}</b> · {session.user.email}</p>

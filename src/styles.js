@@ -185,6 +185,11 @@ export const css = `
   .kv input, .kv select { font:inherit; font-size:13px; border:0; background:none; color:var(--ink); text-align:right; max-width:60%; padding:0; }
   .kv input { border-bottom:1px solid var(--line); padding:2px 0; }
   .lrow-actions { display:flex; justify-content:flex-end; gap:2px; padding-top:4px; }
+  .day-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .day-actions .confirm { font-size:13px; color:var(--ink2); display:inline-flex; align-items:center; gap:4px; flex-wrap:wrap; }
+  .ht-link.danger { color:var(--bad); }
+  .ht-link.danger:hover { background:var(--bad-soft); color:var(--bad); }
+  .modal h3 svg { vertical-align:-2px; margin-right:4px; }
   @media (max-width:720px) {
     .ht-top { padding:calc(14px + env(safe-area-inset-top)) 14px 0; }
     .ht-main { padding:12px 14px calc(50px + env(safe-area-inset-bottom)); }

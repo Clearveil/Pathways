@@ -1,9 +1,15 @@
 import { useState, useEffect } from "react";
 import { today, addDays, uid, now, ACTIVITY, activeOn, mealKey, woKey, logged, fmtLong } from "../lib/utils.js";
+import { Trash } from "./Icons.jsx";
 
 export default function Day({ data, save, date, setDate }) {
   const existing = data.entries.find((e) => e.date === date);
   const [f, setF] = useState(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  useEffect(() => { setConfirmRemove(false); }, [date]);
+  // Drops the whole entry for this day: ratings, notes, checklists, extras.
+  // Plans stay; they belong to the calendar, not the day.
+  const removeEntry = () => { setConfirmRemove(false); save({ ...data, entries: data.entries.filter((e) => e.date !== date) }); };
   const [addingMeal, setAddingMeal] = useState(false);
   const [newMeal, setNewMeal] = useState({ meal: "", items: "" });
   const [addingWo, setAddingWo] = useState(false);
@@ -74,7 +80,11 @@ export default function Day({ data, save, date, setDate }) {
           <div className="ht-field">What was different
             <textarea value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="New food, hard work, conflict, a great day for no reason. Write as much as you want." />
           </div>
-          <button className="btn" onClick={submit} disabled={f.energy == null}>{isLogged ? "Update" : "Save today"}</button>
+          <div className="day-actions">
+            <button className="btn" onClick={submit} disabled={f.energy == null}>{isLogged ? "Update" : "Save today"}</button>
+            {existing && !confirmRemove && <button className="ht-link with-icon" onClick={() => setConfirmRemove(true)}><Trash size={13} /> Remove this day</button>}
+            {existing && confirmRemove && <span className="confirm">Remove everything logged for this day? <button className="ht-link danger" onClick={removeEntry}>Yes, remove</button><button className="ht-link" onClick={() => setConfirmRemove(false)}>Keep</button></span>}
+          </div>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
