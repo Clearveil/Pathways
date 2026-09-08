@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { today, addDays, uid, FOOD_STATUS, CONFIDENCE, INT_TYPE, INT_STATUS, isOn } from "../lib/utils.js";
 import { useNarrow } from "../lib/useNarrow.js";
+import { DOSE_UNITS, doseLabel } from "../lib/dose.js";
 
 export default function Library({ data, save, openWindow }) {
   return (
@@ -108,24 +109,35 @@ function Foods({ data, save, openWindow }) {
 }
 
 function Interventions({ data, save, openWindow }) {
-  const blank = { name: "", type: "supplement", dose: "", start: today(), end: "", source: "", status: "baseline" };
+  const blank = { name: "", type: "supplement", doseAmount: "", doseUnit: "mg", doseNote: "", start: today(), end: "", source: "", status: "baseline" };
   const narrow = useNarrow();
   const [f, setF] = useState(blank);
   const [warn, setWarn] = useState("");
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [doseChange, setDoseChange] = useState(null); // { patch, from, to } awaiting "test or just update?"
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
   const block = () => setWarn(`${openWindow.name} is already being tested. One open test at a time — otherwise you won't know which change did what.`);
-  const closeForm = () => { setF(blank); setEditing(null); setAdding(false); };
-  const startEdit = (x) => { setF({ name: x.name, type: x.type, dose: x.dose || "", start: x.start || "", end: x.end || "", source: x.source || "", status: x.status }); setEditing(x.id); setAdding(true); setWarn(""); };
+  const closeForm = () => { setF(blank); setEditing(null); setAdding(false); setDoseChange(null); };
+  const startEdit = (x) => { setF({ name: x.name, type: x.type, doseAmount: x.doseAmount ?? "", doseUnit: x.doseUnit || "", doseNote: x.doseNote || "", start: x.start || "", end: x.end || "", source: x.source || "", status: x.status }); setEditing(x.id); setAdding(true); setWarn(""); setDoseChange(null); };
+  const applyEdit = (patch) => { save({ ...data, interventions: data.interventions.map((x) => x.id === editing ? { ...x, ...patch } : x) }); closeForm(); };
   const submit = () => {
     if (!f.name.trim()) return;
     const cur = editing ? data.interventions.find((x) => x.id === editing) : null;
     if (f.status === "testing" && openWindow && cur?.status !== "testing") return block();
     setWarn("");
-    if (editing) save({ ...data, interventions: data.interventions.map((x) => x.id === editing ? { ...x, ...f } : x) });
-    else save({ ...data, interventions: [...data.interventions, { ...f, outcome: "", id: uid() }] });
-    closeForm();
+    const patch = { ...f, doseAmount: f.doseAmount === "" ? null : Number(f.doseAmount) };
+    patch.dose = doseLabel(patch);
+    if (!editing) { save({ ...data, interventions: [...data.interventions, { ...patch, outcome: "", id: uid() }] }); closeForm(); return; }
+    // A dose change is a change. Offer to make it a test window rather than
+    // letting it slip in silently beside whatever else is going on.
+    const amountChanged = cur?.doseAmount != null && patch.doseAmount != null && patch.doseAmount !== cur.doseAmount;
+    if (amountChanged && cur.status !== "testing" && patch.status !== "testing") { setDoseChange({ patch, from: doseLabel(cur), to: doseLabel(patch) }); return; }
+    applyEdit(patch);
+  };
+  const startDoseTest = () => {
+    if (openWindow) return block();
+    applyEdit({ ...doseChange.patch, status: "testing", start: today(), end: "" });
   };
   const update = (id, patch) => {
     const cur = data.interventions.find((x) => x.id === id);
@@ -159,7 +171,13 @@ function Interventions({ data, save, openWindow }) {
         <div className="ht-row">
           <div className="ht-field">Name<input value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="Magnesium glycinate" autoFocus /></div>
           <div className="ht-field">Type<select value={f.type} onChange={(e) => set("type", e.target.value)}>{INT_TYPE.map((s) => <option key={s}>{s}</option>)}</select></div>
-          <div className="ht-field">Dose<input value={f.dose} onChange={(e) => set("dose", e.target.value)} placeholder="200 mg, evening" /></div>
+          <div className="ht-field">Dose
+            <div className="dose-fields">
+              <input type="number" inputMode="decimal" min="0" step="any" value={f.doseAmount} onChange={(e) => set("doseAmount", e.target.value)} placeholder="200" />
+              <select value={f.doseUnit} onChange={(e) => set("doseUnit", e.target.value)}><option value="">unit</option>{[...DOSE_UNITS, ...(f.doseUnit && !DOSE_UNITS.includes(f.doseUnit) ? [f.doseUnit] : [])].map((u) => <option key={u} value={u}>{u}</option>)}</select>
+            </div>
+          </div>
+          <div className="ht-field">Dose note<input value={f.doseNote} onChange={(e) => set("doseNote", e.target.value)} placeholder="evening, with food" /></div>
           <div className="ht-field">Recommended by<input value={f.source} onChange={(e) => set("source", e.target.value)} placeholder="Practitioner, book, self" /></div>
         </div>
         <div className="ht-row">
@@ -168,14 +186,25 @@ function Interventions({ data, save, openWindow }) {
           <div className="ht-field">Status<select value={f.status} onChange={(e) => set("status", e.target.value)}>{INT_STATUS.map((s) => <option key={s}>{s}</option>)}</select></div>
         </div>
         <p className="hint" style={{ margin: "-6px 0 10px" }}>Baseline: already taking, not changing. Testing: the one thing you're evaluating now. The switch turns it on or off without losing its history — off sets the end date to yesterday so today's checklist drops it.</p>
-        <button className="btn sm" onClick={submit} style={{ marginBottom: 10 }}>{editing ? "Save changes" : "Save"}</button>
+        {doseChange ? (
+          <div className="ht-status" style={{ marginBottom: 10 }}>
+            <span>Dose changed from <b>{doseChange.from}</b> to <b>{doseChange.to}</b>. A dose change is a change — start a test window for it, or just update the number?</span>
+          </div>
+        ) : null}
+        {doseChange ? (
+          <div className="day-actions" style={{ marginBottom: 10 }}>
+            <button className="btn sm" onClick={startDoseTest}>Start a test</button>
+            <button className="btn ghost sm" onClick={() => applyEdit(doseChange.patch)}>Just update</button>
+            <button className="ht-link" onClick={() => setDoseChange(null)}>Back</button>
+          </div>
+        ) : <button className="btn sm" onClick={submit} style={{ marginBottom: 10 }}>{editing ? "Save changes" : "Save"}</button>}
       </div>}
       {sorted.length === 0 ? <p className="empty">Add everything you currently take as <i>baseline</i> first, so the trends chart has context.</p> : narrow ? (
         <div className="llist">
           {sorted.map((x) => (
             <CompactRow key={x.id} off={!isOn(x)} lead={onSwitch(x)} name={x.name} pill={statusSelect(x)}
-              sub={[x.type, x.dose, x.start ? `from ${x.start}` : null, x.end ? `to ${x.end}` : null].filter(Boolean).join(" · ")}
-              kv={[["Type", x.type], ["Dose", x.dose || "—"], ["Start", x.start || "—"], ["End", endInput(x)], ["From", x.source || "—"], ["Outcome", outcomeInput(x)]]}
+              sub={[x.type, doseLabel(x), x.start ? `from ${x.start}` : null, x.end ? `to ${x.end}` : null].filter(Boolean).join(" · ")}
+              kv={[["Type", x.type], ["Dose", doseLabel(x) || "—"], ["Start", x.start || "—"], ["End", endInput(x)], ["From", x.source || "—"], ["Outcome", outcomeInput(x)]]}
               actions={actions(x)} />
           ))}
         </div>
@@ -184,7 +213,7 @@ function Interventions({ data, save, openWindow }) {
           <tbody>{sorted.map((x) => (
             <tr key={x.id} className={isOn(x) ? "" : "off"}>
               <td>{onSwitch(x)}</td>
-              <td>{x.name}</td><td style={{ color: "var(--mute)" }}>{x.type}</td><td>{x.dose || "—"}</td><td>{x.start || "—"}</td>
+              <td>{x.name}</td><td style={{ color: "var(--mute)" }}>{x.type}</td><td>{doseLabel(x) || "—"}</td><td>{x.start || "—"}</td>
               <td>{endInput(x)}</td>
               <td style={{ color: "var(--mute)" }}>{x.source || "—"}</td>
               <td>{statusSelect(x)}</td>

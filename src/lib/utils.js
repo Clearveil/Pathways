@@ -1,5 +1,6 @@
 // Shared helpers and constants. Pure functions only — nothing here touches
 // storage or React. Every other module imports what it needs from here.
+import { parseDose } from "./dose.js";
 
 export const KEY = "health-tracker-v1";
 export const iso = (d) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`; };
@@ -16,12 +17,13 @@ export function migrate(raw) {
   const d = { ...EMPTY, ...(raw || {}) };
   const stamp = (r) => ({ ...r, id: r.id || uid(), updatedAt: r.updatedAt || now() });
   d.foods = (d.foods || []).map(stamp);
-  d.interventions = (d.interventions || []).map(stamp);
+  // Free-text doses ("200 mg, evening") become numbers the first time they're seen.
+  d.interventions = (d.interventions || []).map((i) => (i.doseAmount == null && !i.doseNote && i.dose) ? { ...stamp(i), ...parseDose(i.dose) } : stamp(i));
   d.meals = (d.meals || []).map((m) => ({ ...stamp(m), planKey: m.planKey || `${m.meal}|${m.items}` }));
   d.workouts = (d.workouts || []).map((w) => ({ ...stamp(w), planKey: w.planKey || `${w.workout}|${w.details}` }));
   d.entries = (d.entries || []).map((e) => {
     const { sleep, ...rest } = e;
-    return { ...stamp(rest), extras: (rest.extras || []).map(stamp), extraWorkouts: (rest.extraWorkouts || []).map(stamp) };
+    return { ...stamp(rest), doses: rest.doses || {}, extras: (rest.extras || []).map(stamp), extraWorkouts: (rest.extraWorkouts || []).map(stamp) };
   });
   d.deleted = d.deleted || [];
   d.schema = SCHEMA;

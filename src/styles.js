@@ -190,6 +190,14 @@ export const css = `
   .ht-link.danger { color:var(--bad); }
   .ht-link.danger:hover { background:var(--bad-soft); color:var(--bad); }
   .modal h3 svg { vertical-align:-2px; margin-right:4px; }
+  .dose-ctl { display:inline-flex; align-items:center; gap:2px; font-size:12px; }
+  .dose-ctl button { width:24px; height:24px; border:1px solid var(--line); background:var(--card); border-radius:6px; font:inherit; font-size:14px; line-height:1; padding:0; cursor:pointer; color:var(--ink2); }
+  .dose-ctl button:hover { border-color:var(--acc); color:var(--acc); }
+  .dose-ctl .amt { min-width:58px; text-align:center; color:var(--ink2); }
+  .check li.on .dose-ctl .amt.changed { color:var(--warn-ink); font-weight:500; }
+  .dose-fields { display:flex; gap:8px; }
+  .dose-fields input[type=number] { width:84px; }
+  .dose-fields select { width:auto; }
   @media (max-width:720px) {
     .ht-top { padding:calc(14px + env(safe-area-inset-top)) 14px 0; }
     .ht-main { padding:12px 14px calc(50px + env(safe-area-inset-bottom)); }

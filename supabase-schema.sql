@@ -230,3 +230,18 @@ create trigger on_auth_user_created
 
 -- It only ever runs as a trigger; nobody should call it through the API.
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Migration `structured_doses` (2026-09-07). Doses as numbers.
+-- `dose` stays as the human-readable label; the numeric parts live beside it
+-- so amounts can be compared across days and adjusted per day.
+-- ---------------------------------------------------------------------------
+alter table public.interventions
+  add column dose_amount numeric,
+  add column dose_unit   text,
+  add column dose_note   text;
+
+-- Actual amount taken per day: { intervention_id: amount }. `taken` remains
+-- the list of ids checked off, so existing queries and insights keep working.
+alter table public.entries
+  add column doses jsonb not null default '{}';

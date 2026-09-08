@@ -15,6 +15,7 @@
 import { supabase, LOCAL_ONLY } from "./supabase.js";
 import { localStore } from "./store.local.js";
 import { KEY, EMPTY, migrate } from "./utils.js";
+import { doseLabel } from "./dose.js";
 
 // The app uses "" for "nothing here"; Postgres wants null. Convert at the edge.
 const nul = (v) => (v === "" || v === undefined ? null : v);
@@ -31,7 +32,7 @@ const TABLES = {
       energy: e.energy ?? null, inflammation: e.inflammation ?? null,
       flare: !!e.flare, severity: e.severity ?? null,
       activity: nul(e.activity), activity_note: nul(e.activityNote), notes: nul(e.notes),
-      taken: e.taken || [], meals_done: e.meals || [], wo_status: e.woStatus || {},
+      taken: e.taken || [], doses: e.doses || {}, meals_done: e.meals || [], wo_status: e.woStatus || {},
       extras: e.extras || [], extra_workouts: e.extraWorkouts || [],
       updated_at: stamp(e.updatedAt),
     }),
@@ -39,7 +40,7 @@ const TABLES = {
       id: r.id, date: r.date,
       energy: r.energy, inflammation: r.inflammation, flare: r.flare, severity: r.severity,
       activity: str(r.activity), activityNote: str(r.activity_note), notes: str(r.notes),
-      taken: r.taken || [], meals: r.meals_done || [], woStatus: r.wo_status || {},
+      taken: r.taken || [], doses: r.doses || {}, meals: r.meals_done || [], woStatus: r.wo_status || {},
       extras: r.extras || [], extraWorkouts: r.extra_workouts || [],
       updatedAt: stamp(r.updated_at),
     }),
@@ -51,8 +52,8 @@ const TABLES = {
   },
   interventions: {
     table: "interventions", order: "start_date",
-    toRow: (i) => ({ id: i.id, name: i.name, type: i.type, dose: nul(i.dose), source: nul(i.source), start_date: nul(i.start), end_date: nul(i.end), status: i.status, outcome: nul(i.outcome), updated_at: stamp(i.updatedAt) }),
-    fromRow: (r) => ({ id: r.id, name: r.name, type: r.type, dose: str(r.dose), source: str(r.source), start: str(r.start_date), end: str(r.end_date), status: r.status, outcome: str(r.outcome), updatedAt: stamp(r.updated_at) }),
+    toRow: (i) => ({ id: i.id, name: i.name, type: i.type, dose: nul(doseLabel(i)), dose_amount: i.doseAmount ?? null, dose_unit: nul(i.doseUnit), dose_note: nul(i.doseNote), source: nul(i.source), start_date: nul(i.start), end_date: nul(i.end), status: i.status, outcome: nul(i.outcome), updated_at: stamp(i.updatedAt) }),
+    fromRow: (r) => ({ id: r.id, name: r.name, type: r.type, dose: str(r.dose), doseAmount: r.dose_amount == null ? null : Number(r.dose_amount), doseUnit: str(r.dose_unit), doseNote: str(r.dose_note), source: str(r.source), start: str(r.start_date), end: str(r.end_date), status: r.status, outcome: str(r.outcome), updatedAt: stamp(r.updated_at) }),
   },
   meals: {
     table: "meal_plan", order: "date",

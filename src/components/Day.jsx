@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { today, addDays, uid, now, ACTIVITY, activeOn, mealKey, woKey, logged, fmtLong } from "../lib/utils.js";
 import { Trash } from "./Icons.jsx";
+import { doseLabel, doseStep, fmtAmt } from "../lib/dose.js";
 
 export default function Day({ data, save, date, setDate }) {
   const existing = data.entries.find((e) => e.date === date);
@@ -46,9 +47,23 @@ export default function Day({ data, save, date, setDate }) {
     setNewWo({ workout: "", details: "" }); setAddingWo(false);
   };
   const removeWo = (id) => saveEntry({ ...f, date, extraWorkouts: (f.extraWorkouts || []).filter((x) => x.id !== id) });
-  const toggleTaken = (id) => {
-    const taken = f.taken?.includes(id) ? f.taken.filter((x) => x !== id) : [...(f.taken || []), id];
-    saveEntry({ ...f, taken, date });
+  // Checking an item records the planned amount for the day; +/- adjusts it.
+  // `taken` stays the list of ids so adherence and insights keep working;
+  // `doses` carries the actual amounts.
+  const toggleTaken = (i) => {
+    const on = f.taken?.includes(i.id);
+    const taken = on ? f.taken.filter((x) => x !== i.id) : [...(f.taken || []), i.id];
+    const doses = { ...(f.doses || {}) };
+    if (on) delete doses[i.id]; else if (i.doseAmount != null) doses[i.id] = i.doseAmount;
+    saveEntry({ ...f, taken, doses, date });
+  };
+  const adjustDose = (i, delta) => {
+    const doses = { ...(f.doses || {}) };
+    const cur = doses[i.id] ?? i.doseAmount ?? 0;
+    const next = Math.max(0, Math.round((cur + delta) * 100) / 100);
+    if (next === 0) return toggleTaken(i);
+    doses[i.id] = next;
+    saveEntry({ ...f, taken: f.taken?.includes(i.id) ? f.taken : [...(f.taken || []), i.id], doses, date });
   };
   const testing = data.foods.filter((x) => x.status === "testing");
 
@@ -163,18 +178,32 @@ export default function Day({ data, save, date, setDate }) {
               {regimen.length > 0 && <span className="hint">{regimen.filter((i) => f.taken?.includes(i.id)).length} of {regimen.length}</span>}
             </div>
             {regimen.length ? <ul className="check">
-              {regimen.map((i) => { const on = f.taken?.includes(i.id); return (
-                <li key={i.id} className={on ? "on" : ""} onClick={() => toggleTaken(i.id)}>
+              {regimen.map((i) => {
+                const on = f.taken?.includes(i.id);
+                const amt = (f.doses || {})[i.id];
+                const planned = i.doseAmount;
+                const shown = amt ?? planned;
+                const changed = on && planned != null && amt != null && amt !== planned;
+                const label = doseLabel(i);
+                return (
+                <li key={i.id} className={on ? "on" : ""} onClick={() => toggleTaken(i)}>
                   <span className="box">{on ? "✓" : ""}</span>
-                  <span style={{ flex: 1 }}>{i.name}{i.dose ? <span className="muted"> · {i.dose}</span> : null}</span>
+                  <span style={{ flex: 1 }}>{i.name}{label && !(on && planned != null) ? <span className="muted"> · {label}</span> : null}{changed ? <span className="muted"> · planned {fmtAmt(planned)}</span> : null}</span>
+                  {on && planned != null && (
+                    <span className="dose-ctl" onClick={(e) => e.stopPropagation()}>
+                      <button type="button" onClick={() => adjustDose(i, -doseStep(planned, i.doseUnit))} aria-label="Less">−</button>
+                      <span className={"amt" + (changed ? " changed" : "")}>{fmtAmt(shown)} {i.doseUnit}</span>
+                      <button type="button" onClick={() => adjustDose(i, doseStep(planned, i.doseUnit))} aria-label="More">+</button>
+                    </span>
+                  )}
                   {i.status === "testing" && <span className="pill testing">testing</span>}
                 </li>); })}
-            </ul> : <p className="empty">Nothing on the regimen for this day. Add what you take under Foods & supplements and switch it on.</p>}
+            </ul> : <p className="empty">Nothing on the regimen for this day. Add what you take under Index and switch it on.</p>}
             {(lifestyle.length > 0 || testing.length > 0) && <ul className="list" style={{ marginTop: 8 }}>
               {lifestyle.map((i) => <li key={i.id}><span>{i.name}</span><span className={`pill ${i.status}`}>{i.status}</span></li>)}
               {testing.map((x) => <li key={x.id}><span>{x.name}</span><span className="pill testing">food test</span></li>)}
             </ul>}
-            {regimen.length > 0 && <p className="hint" style={{ marginTop: 8 }}>Checks save instantly — tap as you take them.</p>}
+            {regimen.length > 0 && <p className="hint" style={{ marginTop: 8 }}>Checks save instantly — tap as you take them. Use − and + if today's dose differed from the plan; the amount is recorded for the day.</p>}
           </div>
         </div>
       </div>
