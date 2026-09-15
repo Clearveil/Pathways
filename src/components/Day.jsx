@@ -15,7 +15,7 @@ export default function Day({ data, save, date, setDate }) {
   const [newMeal, setNewMeal] = useState({ meal: "", items: "" });
   const [addingWo, setAddingWo] = useState(false);
   const [newWo, setNewWo] = useState({ workout: "", details: "" });
-  useEffect(() => { setF(existing || { date, energy: null, inflammation: null, flare: false, severity: 3, activity: "", activityNote: "", notes: "", taken: [], meals: [], extras: [] }); }, [date, existing]);
+  useEffect(() => { setF(existing || { date, energy: null, inflammation: null, clarity: null, flare: false, severity: 3, activity: "", activityNote: "", notes: "", taken: [], meals: [], extras: [] }); }, [date, existing]);
   if (!f) return null;
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
   const submit = () => { if (f.energy == null) return; saveEntry({ ...f, date }); };
@@ -83,6 +83,9 @@ export default function Day({ data, save, date, setDate }) {
           </div>
           <div className="ht-field">Inflammation <span className="hint" style={{ marginTop: -4 }}>1 is none, 10 is the worst you get</span>
             <div className="scale">{[1,2,3,4,5,6,7,8,9,10].map((n) => <button key={n} className={f.inflammation === n ? "on" : ""} onClick={() => set("inflammation", n)}>{n}</button>)}</div>
+          </div>
+          <div className="ht-field">Mental clarity <span className="hint" style={{ marginTop: -4 }}>1 is fog, 10 is sharp</span>
+            <div className="scale">{[1,2,3,4,5,6,7,8,9,10].map((n) => <button key={n} className={f.clarity === n ? "on" : ""} onClick={() => set("clarity", n)}>{n}</button>)}</div>
           </div>
           <div className="ht-row">
             <div className="ht-field">Flare

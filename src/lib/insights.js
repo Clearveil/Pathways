@@ -11,7 +11,12 @@ export function buildInsights(data) {
   const avg = (a) => a.length ? a.reduce((s, e) => s + e.energy, 0) / a.length : null;
   const flareRate = (a) => a.length ? a.filter((e) => e.flare).length / a.length : null;
   const inf = (a) => { const b = a.filter((e) => e.inflammation != null); return b.length ? b.reduce((s, e) => s + e.inflammation, 0) / b.length : null; };
-  const infTxt = (a, b) => (inf(a) != null && inf(b) != null) ? ` Inflammation ${inf(a).toFixed(1)} vs ${inf(b).toFixed(1)}.` : "";
+  const clar = (a) => { const b = a.filter((e) => e.clarity != null); return b.length ? b.reduce((s, e) => s + e.clarity, 0) / b.length : null; };
+  // Secondary measures appended to every comparison, so a test window or a
+  // regimen gap is judged on inflammation and mental clarity too, not just energy.
+  const infTxt = (a, b) =>
+    ((inf(a) != null && inf(b) != null) ? ` Inflammation ${inf(a).toFixed(1)} vs ${inf(b).toFixed(1)}.` : "") +
+    ((clar(a) != null && clar(b) != null) ? ` Mental clarity ${clar(a).toFixed(1)} vs ${clar(b).toFixed(1)}.` : "");
   const inRange = (s, e) => E.filter((x) => x.date >= s && x.date <= e);
 
   if (n === 0) { out.push({ tone: "flat", title: "Nothing to read yet", body: "Insights appear once there's data. The first two weeks are baseline — the goal is to see what a normal week looks like before changing anything." }); return out; }
@@ -23,6 +28,34 @@ export function buildInsights(data) {
     const d = avg(last) - avg(prev);
     const tone = d > 0.7 ? "up" : d < -0.7 ? "down" : "flat";
     out.push({ tone, title: "This week vs last week", body: `Average energy ${avg(last).toFixed(1)} vs ${avg(prev).toFixed(1)}. ${tone === "flat" ? "About the same — that's a stable baseline, which is what you want before testing something." : tone === "up" ? "Better. Check the notes from this week for what might explain it." : "Lower. Look at what was different — the notes column is where the answer usually is."} Flare days: ${last.filter((e) => e.flare).length} vs ${prev.filter((e) => e.flare).length}.${infTxt(last, prev)}` });
+  }
+
+  // Mental clarity: foggy days and what tends to come the day before them
+  {
+    const C = E.filter((e) => e.clarity != null);
+    if (C.length >= 10) {
+      const foggy = C.filter((e) => e.clarity <= 4), clear = C.filter((e) => e.clarity >= 7);
+      const byDate = Object.fromEntries(E.map((e) => [e.date, e]));
+      const before = (arr) => arr.map((e) => byDate[addDays(e.date, -1)]).filter(Boolean);
+      const pct = (arr, f) => arr.length ? Math.round(100 * arr.filter(f).length / arr.length) : null;
+      let body = `${foggy.length} foggy day${foggy.length === 1 ? "" : "s"} (4 or below) out of ${C.length} rated.`;
+      let tone = "flat";
+      if (foggy.length >= 3 && clear.length >= 3) {
+        const fb = before(foggy), cb = before(clear);
+        const dE = avg(foggy) - avg(clear);
+        body += ` Energy on foggy days averages ${avg(foggy).toFixed(1)} vs ${avg(clear).toFixed(1)} on clear days${Math.abs(dE) < 0.8 ? " — clarity and energy are moving separately, which is worth knowing." : " — they move together."}`;
+        if (fb.length >= 3 && cb.length >= 3) {
+          const hardF = pct(fb, (e) => e.activity === "hard" || e.activity === "moderate"), hardC = pct(cb, (e) => e.activity === "hard" || e.activity === "moderate");
+          const extF = pct(fb, (e) => (e.extras || []).length > 0), extC = pct(cb, (e) => (e.extras || []).length > 0);
+          const bits = [];
+          if (hardF != null && hardC != null && Math.abs(hardF - hardC) >= 25) bits.push(`moderate or hard activity the day before ${hardF}% of foggy days vs ${hardC}% of clear ones`);
+          if (extF != null && extC != null && Math.abs(extF - extC) >= 25) bits.push(`unplanned food the day before ${extF}% vs ${extC}%`);
+          body += bits.length ? ` The day before matters: ${bits.join("; ")}.` : " Nothing in the day before (activity, unplanned food) separates foggy days from clear ones so far.";
+          if (bits.length) tone = "down";
+        }
+      } else if (foggy.length < 3) body += " Not enough foggy days to compare against — which is good news.";
+      out.push({ tone, title: "Mental clarity", body });
+    }
   }
 
   // Each tested intervention

@@ -245,3 +245,9 @@ alter table public.interventions
 -- the list of ids checked off, so existing queries and insights keep working.
 alter table public.entries
   add column doses jsonb not null default '{}';
+
+-- ---------------------------------------------------------------------------
+-- Migration `mental_clarity` (2026-09-14). Rated per day, 1 (fog) to 10 (sharp).
+-- ---------------------------------------------------------------------------
+alter table public.entries
+  add column clarity smallint check (clarity between 1 and 10);

@@ -29,7 +29,7 @@ const TABLES = {
     table: "entries", order: "date",
     toRow: (e) => ({
       id: e.id, date: e.date,
-      energy: e.energy ?? null, inflammation: e.inflammation ?? null,
+      energy: e.energy ?? null, inflammation: e.inflammation ?? null, clarity: e.clarity ?? null,
       flare: !!e.flare, severity: e.severity ?? null,
       activity: nul(e.activity), activity_note: nul(e.activityNote), notes: nul(e.notes),
       taken: e.taken || [], doses: e.doses || {}, meals_done: e.meals || [], wo_status: e.woStatus || {},
@@ -38,7 +38,7 @@ const TABLES = {
     }),
     fromRow: (r) => ({
       id: r.id, date: r.date,
-      energy: r.energy, inflammation: r.inflammation, flare: r.flare, severity: r.severity,
+      energy: r.energy, inflammation: r.inflammation, clarity: r.clarity, flare: r.flare, severity: r.severity,
       activity: str(r.activity), activityNote: str(r.activity_note), notes: str(r.notes),
       taken: r.taken || [], doses: r.doses || {}, meals: r.meals_done || [], woStatus: r.wo_status || {},
       extras: r.extras || [], extraWorkouts: r.extra_workouts || [],

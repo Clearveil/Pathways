@@ -5,7 +5,8 @@ import { buildInsights } from "../lib/insights.js";
 
 export default function Trends({ data, dark }) {
   const c = dark ? { ink:"#ECECEC", mute:"#7C7C7C", grid:"#262626", card:"#1E1E1E", line:"#2E2E2E", acc:"#D9D9D9", bad:"#E08A7C", disc:"#555" } : { ink:"#161616", mute:"#8C8C8C", grid:"#EFEFEF", card:"#FFFFFF", line:"#E4E4E4", acc:"#1C1C1C", bad:"#9A3B2E", disc:"#BDBDBD" };
-  const rows = data.entries.filter(logged).map((e) => ({ date: e.date, energy: e.energy, inflammation: e.inflammation ?? null, flare: e.flare ? e.severity : null }));
+  const rows = data.entries.filter(logged).map((e) => ({ date: e.date, energy: e.energy, inflammation: e.inflammation ?? null, clarity: e.clarity ?? null, flare: e.flare ? e.severity : null }));
+  const hasClarity = rows.some((r) => r.clarity != null);
   const windows = data.interventions.filter((i) => i.start && i.status !== "baseline").map((i) => ({ ...i, end: i.end || today() }));
   const fill = { testing: c.acc, established: c.acc, discontinued: c.disc };
   const insights = useMemo(() => buildInsights(data), [data]);
@@ -15,7 +16,7 @@ export default function Trends({ data, dark }) {
       <div className="ht-nav"><h2>Trends & insights</h2></div>
       {rows.length < 2 ? <div className="card"><p className="empty">Two or more logged days and the chart shows up here. Give it two weeks before reading anything into it.</p></div> : (
         <div className="card">
-          <p className="hint" style={{ marginTop: 0 }}>Energy solid, inflammation dashed. Red dots are flare days, bigger is worse. Shaded bands are tests.</p>
+          <p className="hint" style={{ marginTop: 0 }}>Energy solid, inflammation dashed{hasClarity ? ", mental clarity dotted" : ""}. Red dots are flare days, bigger is worse. Shaded bands are tests.</p>
           <div style={{ height: 300, fontSize: 12 }}>
             <ResponsiveContainer>
               <LineChart data={rows} margin={{ top: 10, right: 12, left: -18, bottom: 0 }}>
@@ -27,6 +28,7 @@ export default function Trends({ data, dark }) {
                 <Line type="monotone" dataKey="energy" stroke={c.ink} strokeWidth={2} isAnimationActive={false}
                   dot={(p) => p.payload.flare ? <circle key={p.payload.date} cx={p.cx} cy={p.cy} r={3 + p.payload.flare} fill={c.bad} /> : <circle key={p.payload.date} cx={p.cx} cy={p.cy} r={2.5} fill={c.ink} />} />
                 <Line type="monotone" dataKey="inflammation" stroke={c.mute} strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls isAnimationActive={false} />
+                {hasClarity && <Line type="monotone" dataKey="clarity" name="mental clarity" stroke={c.ink} strokeOpacity={0.55} strokeWidth={1.5} strokeDasharray="1 3" strokeLinecap="round" dot={false} connectNulls isAnimationActive={false} />}
               </LineChart>
             </ResponsiveContainer>
           </div>
