@@ -154,6 +154,12 @@ export const css = `
   .icon-btn:hover { border-color:var(--acc); color:var(--acc); }
   .status-icon { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; color:var(--mute); }
   .status-icon.bad { color:var(--bad); }
+  .status-icon { border:0; background:none; cursor:pointer; padding:0; border-radius:8px; }
+  .status-icon:hover { color:var(--acc); }
+  .status-icon.syncing svg { animation:ht-pulse 1s ease-in-out infinite; }
+  @keyframes ht-pulse { 0%,100% { opacity:1; } 50% { opacity:.3; } }
+  .list li.editing { background:var(--acc-soft); margin:0 -8px; padding-left:8px; padding-right:8px; border-radius:8px; }
+  .dose-ctl button:disabled { opacity:.35; cursor:default; }
   .mob-only { display:none; }
   .ht-msg { margin:8px 14px 0; font-size:12px; color:var(--mute); }
   .menu button svg { vertical-align:-3px; margin-right:6px; }

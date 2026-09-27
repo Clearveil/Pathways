@@ -15,6 +15,7 @@ export default function Day({ data, save, date, setDate }) {
   const [newMeal, setNewMeal] = useState({ meal: "", items: "" });
   const [addingWo, setAddingWo] = useState(false);
   const [newWo, setNewWo] = useState({ workout: "", details: "" });
+  const [editingExtra, setEditingExtra] = useState(null); // id of the off-plan food being edited
   useEffect(() => { setF(existing || { date, energy: null, inflammation: null, clarity: null, flare: false, severity: 3, activity: "", activityNote: "", notes: "", taken: [], meals: [], extras: [] }); }, [date, existing]);
   if (!f) return null;
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
@@ -26,10 +27,23 @@ export default function Day({ data, save, date, setDate }) {
   const lifestyle = active.filter((i) => i.type === "lifestyle");
   const saveEntry = (next) => { const row = { ...next, id: next.id || uid(), updatedAt: now() }; setF(row); save({ ...data, entries: [...data.entries.filter((e) => e.date !== date), row].sort((a, b) => a.date.localeCompare(b.date)) }); };
   const toggleMeal = (k) => saveEntry({ ...f, date, meals: f.meals?.includes(k) ? f.meals.filter((x) => x !== k) : [...(f.meals || []), k] });
+  // Off-plan food. Each item carries a quantity (servings) so "two of those
+  // crackers" is one entry with qty 2, not two entries. Editing reopens the
+  // add form with the item filled in and saves back to the same id.
   const addExtra = () => {
     if (!newMeal.items.trim()) return;
-    saveEntry({ ...f, date, extras: [...(f.extras || []), { id: uid(), meal: newMeal.meal.trim() || "meal", items: newMeal.items.trim() }] });
-    setNewMeal({ meal: "", items: "" }); setAddingMeal(false);
+    const item = { meal: newMeal.meal.trim() || "meal", items: newMeal.items.trim() };
+    const extras = editingExtra
+      ? (f.extras || []).map((x) => x.id === editingExtra ? { ...x, ...item } : x)
+      : [...(f.extras || []), { id: uid(), qty: 1, ...item }];
+    saveEntry({ ...f, date, extras });
+    setNewMeal({ meal: "", items: "" }); setAddingMeal(false); setEditingExtra(null);
+  };
+  const editExtra = (x) => { setNewMeal({ meal: x.meal === "meal" ? "" : x.meal, items: x.items }); setEditingExtra(x.id); setAddingMeal(true); };
+  const cancelExtra = () => { setNewMeal({ meal: "", items: "" }); setAddingMeal(false); setEditingExtra(null); };
+  const bumpExtra = (id, delta) => {
+    const extras = (f.extras || []).map((x) => x.id === id ? { ...x, qty: Math.max(1, (x.qty || 1) + delta) } : x);
+    saveEntry({ ...f, date, extras });
   };
   const removeExtra = (id) => saveEntry({ ...f, date, extras: (f.extras || []).filter((x) => x.id !== id) });
   const plannedWo = (data.workouts || []).filter((w) => w.date === date);
@@ -110,7 +124,7 @@ export default function Day({ data, save, date, setDate }) {
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <h3 style={{ flex: 1, marginBottom: 0 }}>Food</h3>
               {meals.length > 0 && <span className="hint">{meals.filter((m) => f.meals?.includes(mealKey(m))).length} of {meals.length} planned</span>}
-              <button className="btn ghost sm" onClick={() => setAddingMeal(!addingMeal)}>{addingMeal ? "Cancel" : "+ Add"}</button>
+              <button className="btn ghost sm" onClick={() => addingMeal ? cancelExtra() : setAddingMeal(true)}>{addingMeal ? "Cancel" : "+ Add"}</button>
             </div>
             {meals.length > 0 && <ul className="check" style={{ marginTop: 8 }}>
               {meals.map((m, i) => { const k = mealKey(m); const on = f.meals?.includes(k); return (
@@ -121,9 +135,15 @@ export default function Day({ data, save, date, setDate }) {
                 </li>); })}
             </ul>}
             {(f.extras || []).length > 0 && <ul className="list" style={{ marginTop: 8 }}>
-              {f.extras.map((x) => <li key={x.id}>
+              {f.extras.map((x) => <li key={x.id} className={editingExtra === x.id ? "editing" : ""}>
                 <span style={{ flex: 1 }}>{x.items}</span>
                 <span className="muted" style={{ fontSize: 12, textTransform: "capitalize" }}>{x.meal}</span>
+                <span className="dose-ctl" title="How many servings">
+                  <button type="button" onClick={() => bumpExtra(x.id, -1)} disabled={(x.qty || 1) <= 1} aria-label="One fewer">−</button>
+                  <span className="amt" style={{ minWidth: 28 }}>×{x.qty || 1}</span>
+                  <button type="button" onClick={() => bumpExtra(x.id, 1)} aria-label="One more">+</button>
+                </span>
+                <button className="ht-link" style={{ padding: "0 6px", fontSize: 12 }} onClick={() => editExtra(x)}>Edit</button>
                 <button className="ht-link" style={{ padding: "0 4px", fontSize: 13, lineHeight: 1 }} onClick={() => removeExtra(x.id)} title="Remove">×</button>
               </li>)}
             </ul>}
@@ -132,7 +152,7 @@ export default function Day({ data, save, date, setDate }) {
                 <div className="ht-field" style={{ flex: 2 }}>What you ate<input value={newMeal.items} onChange={(e) => setNewMeal({ ...newMeal, items: e.target.value })} placeholder="Eggs, white rice" autoFocus onKeyDown={(e) => e.key === "Enter" && addExtra()} /></div>
                 <div className="ht-field">When<input value={newMeal.meal} onChange={(e) => setNewMeal({ ...newMeal, meal: e.target.value })} placeholder="Lunch" onKeyDown={(e) => e.key === "Enter" && addExtra()} /></div>
               </div>
-              <button className="btn sm" onClick={addExtra} style={{ marginBottom: 10 }}>Log it</button>
+              <button className="btn sm" onClick={addExtra} style={{ marginBottom: 10 }}>{editingExtra ? "Save changes" : "Log it"}</button>
             </div>}
             {meals.length === 0 && !(f.extras || []).length && !addingMeal && <p className="empty" style={{ marginTop: 8 }}>Nothing logged. Add what you ate, or import a meal plan in Month view to get a checklist here.</p>}
             {meals.length > 0 && <p className="hint" style={{ marginTop: 8 }}>Check what you actually ate. Anything off-plan goes under + Add so the record matches what happened.</p>}

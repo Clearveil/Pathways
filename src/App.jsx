@@ -46,22 +46,55 @@ function HealthTracker({ session }) {
   const [planImport, setPlanImport] = useState(false);
   const [dataModal, setDataModal] = useState(false);
 
+  const [syncing, setSyncing] = useState(false);
+  const pending = useRef(0);      // saves in flight; don't pull while pushing
+  const dataRef = useRef(data);   // latest data for the resume listener
+  dataRef.current = data;
+
+  // Pull the account's data from the database and replace what's on screen
+  // if anything differs. Runs on open, when the app comes back to the
+  // foreground, and when the cloud icon is tapped.
+  const refresh = async (quiet = false) => {
+    if (pending.current > 0) return;
+    setSyncing(true);
+    try {
+      const d = await store.load();
+      if (d && JSON.stringify(d) !== JSON.stringify(dataRef.current)) setData(d);
+      setStorageOk(true);
+      if (!quiet) { setMsg("Up to date"); setTimeout(() => setMsg(""), 1200); }
+    } catch (e) { console.error(e); setStorageOk(false); if (!quiet) setMsg(`Couldn't sync — ${e.message || "database unreachable"}`); }
+    setSyncing(false);
+  };
+
   useEffect(() => {
     (async () => {
       try { if ((await store.pref("theme")) === "dark") setDark(true); } catch (e) {}
-      try { const d = await store.load(); if (d) setData(d); setStorageOk(true); }
-      catch (e) { console.error(e); setStorageOk(false); }
+      await refresh(true);
       try { const p = await store.profile(); if (p?.plan) setPlan(p.plan); } catch (e) {}
       setLoaded(true);
     })();
+    // A home-screen app is often resumed, not reopened, so the first load
+    // can be hours old. Re-sync whenever the app comes back into view.
+    let last = Date.now();
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - last < 5000) return; // ignore quick flips (share sheet, notifications)
+      last = Date.now();
+      refresh(true);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => { document.removeEventListener("visibilitychange", onVisible); window.removeEventListener("focus", onVisible); };
   }, []);
 
   const save = async (next) => {
     setData(next);
+    pending.current += 1;
     try {
       await store.saveAll(next);
       setStorageOk(true); setMsg("Saved"); setTimeout(() => setMsg(""), 1200);
     } catch (e) { setStorageOk(false); setMsg(`Not saved — ${e.message || "database unreachable"}`); }
+    pending.current -= 1;
   };
 
   const openWindow = useMemo(() => {
@@ -111,7 +144,7 @@ function HealthTracker({ session }) {
   if (!loaded) return <div className="ht" style={{ padding: 30, color: "#8C8C8C" }}>Opening Pathways…</div>;
 
   // Connection state, as text on desktop and as an icon on phones.
-  const statusText = storageOk === false ? "Can't reach the database — changes won't save. Export before you leave." : LOCAL_ONLY ? "Browser-only mode" : "Connected";
+  const statusText = syncing ? "Syncing…" : storageOk === false ? "Can't reach the database — changes won't save. Export before you leave." : LOCAL_ONLY ? "Browser-only mode" : "Connected";
   const StatusIcon = storageOk === false ? CloudOff : msg === "Saved" ? Check : LOCAL_ONLY ? Drive : CloudCheck;
 
   return (
@@ -130,9 +163,9 @@ function HealthTracker({ session }) {
         </div>
         <span className="ht-spacer" />
         <div className="ht-actions">
-          {msg ? <span className="hint desk-only">{msg}</span>
-               : storageOk !== null && <span className="hint desk-only" style={storageOk === false ? { color: "var(--bad)" } : undefined}>{statusText}</span>}
-          {storageOk !== null && <span className={"status-icon mob-only" + (storageOk === false ? " bad" : "")} title={msg || statusText}><StatusIcon /></span>}
+          {msg && !syncing ? <span className="hint desk-only">{msg}</span>
+               : storageOk !== null && <button className="ht-link desk-only" onClick={() => refresh()} title="Sync now" style={storageOk === false ? { color: "var(--bad)" } : undefined}>{statusText}</button>}
+          {storageOk !== null && <button className={"status-icon mob-only" + (storageOk === false ? " bad" : "") + (syncing ? " syncing" : "")} onClick={() => refresh()} title={syncing ? "Syncing…" : "Tap to sync"} aria-label="Sync now"><StatusIcon /></button>}
           <input ref={importRef} type="file" accept=".json" style={{ display: "none" }} onChange={(e) => { if (e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ""; }} />
           <button className="ht-link desk-only" onClick={() => setDataModal(true)}>Import</button>
           <button className="ht-link desk-only" onClick={() => setDataModal(true)}>Export</button>
