@@ -225,6 +225,14 @@ export const css = `
   .rname { flex:1; min-width:0; }
   .time-chip { display:inline-block; margin-left:6px; font-size:11px; color:var(--mute); border:1px solid var(--line2); border-radius:6px; padding:0 5px; vertical-align:1px; }
   .dose-ctl .amt small { color:var(--mute); font-size:10px; margin-left:2px; }
+  /* split-dose progress: one dot per portion, filled as they're taken */
+  .dose-dots { display:inline-flex; gap:3px; margin-right:2px; }
+  .dose-dots span { width:6px; height:6px; border-radius:50%; border:1px solid var(--ink2); }
+  .dose-dots span.on { background:var(--ink); border-color:var(--ink); }
+  /* Repeat: quiet chip in card headers, list opens beneath */
+  .repeat-btn { display:inline-flex; align-items:center; gap:5px; color:var(--mute); }
+  .repeat-menu { min-width:230px; max-height:320px; overflow:auto; }
+  .repeat-menu button small { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   /* --- schedule fields --- */
   .daypick { display:flex; gap:4px; }
   .daypick button { flex:1 1 0; min-width:0; max-width:40px; }

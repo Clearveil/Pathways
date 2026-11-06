@@ -205,6 +205,25 @@ export function buildInsights(data) {
     if (lines.length) out.push({ tone: toneOf(biggest), title: "Drinks", body: lines.join(". ") + ". Each is compared on energy, inflammation, clarity and stress; under about 1 point is noise at this sample size." });
   }
 
+  // One-offs added to the routine on the day (not in the Index): each name
+  // used on 3+ days, compared on the same day and the day after.
+  {
+    const by = {};
+    E.forEach((e) => (e.routineExtras || []).forEach((x) => { const k = x.name.toLowerCase().trim(); (by[k] ||= new Set()).add(e.date); }));
+    const lines = [];
+    let biggest = 0;
+    Object.entries(by).forEach(([k, set]) => {
+      const withX = E.filter((e) => set.has(e.date)), without = E.filter((e) => !set.has(e.date));
+      if (withX.length < 3 || without.length < 4) return;
+      const wa = nextDays(withX), oa = nextDays(without);
+      const same = gap(withX, without), next = wa.length >= 3 && oa.length >= 3 ? gap(wa, oa) : null;
+      const g = next != null && Math.abs(next) > Math.abs(same) ? next : same;
+      if (Math.abs(g) > Math.abs(biggest)) biggest = g;
+      lines.push(`${k} (${withX.length} days): energy ${avg(withX).toFixed(1)} vs ${avg(without).toFixed(1)} without${next != null ? `, next day ${avg(wa).toFixed(1)} vs ${avg(oa).toFixed(1)}` : ""}`);
+    });
+    if (lines.length) out.push({ tone: toneOf(biggest), title: "Taken outside the routine", body: lines.join(". ") + ". These are things added for a single day. Something taken only on bad days will look worse here for that reason alone — check the notes before reading it as cause." });
+  }
+
   // Meal plan adherence
   const withMeals = E.map((e) => ({ e, m: mealsOn(data, e, e.date) })).filter((x) => x.m);
   if (withMeals.length >= 7) {
@@ -286,8 +305,9 @@ export function buildInsights(data) {
   }
 
   // Food status summary
-  const nt = data.foods.filter((x) => x.status === "not tolerated"), unk = data.foods.filter((x) => x.status === "unknown");
-  if (data.foods.length >= 5) out.push({ tone: "flat", title: "Foods", body: `${data.foods.filter((x) => x.status === "tolerated").length} tolerated, ${nt.length} not, ${unk.length} untested. ${unk.length > 0 ? "Untested foods are your test queue — one at a time, three or four days each, only when nothing else is open." : "No untested foods left in the list."}` });
+  const foodsOnly = data.foods.filter((x) => (x.kind || "food") === "food");
+  const nt = foodsOnly.filter((x) => x.status === "not tolerated"), unk = foodsOnly.filter((x) => x.status === "unknown");
+  if (foodsOnly.length >= 5) out.push({ tone: "flat", title: "Foods", body: `${foodsOnly.filter((x) => x.status === "tolerated").length} tolerated, ${nt.length} not, ${unk.length} untested. ${unk.length > 0 ? "Untested foods are your test queue — one at a time, three or four days each, only when nothing else is open." : "No untested foods left in the list."}` });
 
   return out;
 }

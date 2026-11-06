@@ -16,7 +16,7 @@ export const now = () => new Date().toISOString();
 export function migrate(raw) {
   const d = { ...EMPTY, ...(raw || {}) };
   const stamp = (r) => ({ ...r, id: r.id || uid(), updatedAt: r.updatedAt || now() });
-  d.foods = (d.foods || []).map(stamp);
+  d.foods = (d.foods || []).map((x) => ({ ...stamp(x), kind: x.kind || "food", size: x.size || "" }));
   // Free-text doses ("200 mg, evening") become numbers the first time they're seen.
   // Old kinds map forward; every item gets a schedule (null days = every day).
   d.interventions = (d.interventions || []).map((i0) => {
@@ -27,7 +27,7 @@ export function migrate(raw) {
   d.workouts = (d.workouts || []).map((w) => ({ ...stamp(w), planKey: w.planKey || `${w.workout}|${w.details}` }));
   d.entries = (d.entries || []).map((e) => {
     const { sleep, ...rest } = e;
-    return { ...stamp(rest), doses: rest.doses || {}, drinks: rest.drinks || [], activityStatus: rest.activityStatus || {}, extras: (rest.extras || []).map(stamp), extraWorkouts: (rest.extraWorkouts || []).map(stamp) };
+    return { ...stamp(rest), doses: rest.doses || {}, drinks: rest.drinks || [], activityStatus: rest.activityStatus || {}, routineExtras: rest.routineExtras || [], extras: (rest.extras || []).map(stamp), extraWorkouts: (rest.extraWorkouts || []).map(stamp) };
   });
   d.deleted = d.deleted || [];
   d.schema = SCHEMA;

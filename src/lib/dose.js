@@ -57,3 +57,9 @@ export function portionOf(i) {
   if (COUNT_UNITS.includes(i.doseUnit) || i.doseUnit === "drops") return Math.max(0.5, Math.round(p * 2) / 2);
   return Math.round(p * 100) / 100;
 }
+
+// "2 capsules", "1 capsule", "3 g": the unit as it should read next to an amount.
+export function unitFor(amount, unit) {
+  if (!unit) return "";
+  return COUNT_UNITS.includes(unit) && amount !== 1 ? unit + "s" : unit;
+}

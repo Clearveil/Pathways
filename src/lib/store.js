@@ -33,7 +33,7 @@ const TABLES = {
       flare: !!e.flare, severity: e.severity ?? null,
       activity: nul(e.activity), activity_note: nul(e.activityNote), notes: nul(e.notes),
       taken: e.taken || [], doses: e.doses || {}, meals_done: e.meals || [], wo_status: e.woStatus || {},
-      extras: e.extras || [], extra_workouts: e.extraWorkouts || [], drinks: e.drinks || [], activity_status: e.activityStatus || {},
+      extras: e.extras || [], extra_workouts: e.extraWorkouts || [], drinks: e.drinks || [], activity_status: e.activityStatus || {}, routine_extras: e.routineExtras || [],
       updated_at: stamp(e.updatedAt),
     }),
     fromRow: (r) => ({
@@ -41,14 +41,14 @@ const TABLES = {
       energy: r.energy, inflammation: r.inflammation, clarity: r.clarity, stress: r.stress, flare: r.flare, severity: r.severity,
       activity: str(r.activity), activityNote: str(r.activity_note), notes: str(r.notes),
       taken: r.taken || [], doses: r.doses || {}, meals: r.meals_done || [], woStatus: r.wo_status || {},
-      extras: r.extras || [], extraWorkouts: r.extra_workouts || [], drinks: r.drinks || [], activityStatus: r.activity_status || {},
+      extras: r.extras || [], extraWorkouts: r.extra_workouts || [], drinks: r.drinks || [], activityStatus: r.activity_status || {}, routineExtras: r.routine_extras || [],
       updatedAt: stamp(r.updated_at),
     }),
   },
   foods: {
     table: "foods", order: "name",
-    toRow: (f) => ({ id: f.id, name: f.name, category: nul(f.category), status: f.status, confidence: f.confidence, last_tested: nul(f.lastTested), updated_at: stamp(f.updatedAt) }),
-    fromRow: (r) => ({ id: r.id, name: r.name, category: str(r.category), status: r.status, confidence: r.confidence, lastTested: str(r.last_tested), updatedAt: stamp(r.updated_at) }),
+    toRow: (f) => ({ id: f.id, name: f.name, kind: f.kind === "drink" ? "drink" : "food", size: nul(f.size), category: nul(f.category), status: f.status, confidence: f.confidence, last_tested: nul(f.lastTested), updated_at: stamp(f.updatedAt) }),
+    fromRow: (r) => ({ id: r.id, name: r.name, kind: r.kind || "food", size: str(r.size), category: str(r.category), status: r.status, confidence: r.confidence, lastTested: str(r.last_tested), updatedAt: stamp(r.updated_at) }),
   },
   interventions: {
     table: "interventions", order: "start_date",

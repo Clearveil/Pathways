@@ -280,3 +280,17 @@ alter table public.interventions add constraint interventions_type_check
 update public.interventions set type = case type
   when 'western' then 'medication' when 'naturopathic' then 'treatment' when 'lifestyle' then 'activity' else type end
 where type in ('western','naturopathic','lifestyle');
+
+-- ---------------------------------------------------------------------------
+-- Migration `drinks_index_and_routine_extras` (2026-11-06).
+-- ---------------------------------------------------------------------------
+-- Drinks get their own Index section, stored in foods with kind = 'drink' so
+-- tolerance status and the one-open-test rule apply to them automatically.
+alter table public.foods
+  add column kind text not null default 'food' check (kind in ('food','drink')),
+  add column size text;   -- usual serving, e.g. '16 oz'
+
+-- Taken or done outside the routine and not in the Index:
+-- [{id, name, kind, amount, unit, qty}].
+alter table public.entries
+  add column routine_extras jsonb not null default '[]';

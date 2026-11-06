@@ -18,7 +18,8 @@ export default function Library({ data, save, openWindow }) {
   return (
     <div className="lib">
       {INT_TYPE.map((kind) => <Interventions key={kind} kind={kind} data={data} save={save} openWindow={openWindow} />)}
-      <Foods data={data} save={save} openWindow={openWindow} />
+      <Foods kind="food" data={data} save={save} openWindow={openWindow} />
+      <Foods kind="drink" data={data} save={save} openWindow={openWindow} />
     </div>
   );
 }
@@ -129,7 +130,7 @@ function Interventions({ kind, data, save, openWindow }) {
         {editing && <p className="hint" style={{ margin: "0 0 8px" }}>Editing <b>{data.interventions.find((x) => x.id === editing)?.name}</b></p>}
         <div className="ht-row">
           <div className="ht-field">Name<input value={f.name} onChange={(e) => set("name", e.target.value)} placeholder={formAct ? "Morning walk" : kind === "medication" ? "Low-dose naltrexone" : kind === "treatment" ? "Infrared sauna" : "Magnesium glycinate"} autoFocus /></div>
-          <div className="ht-field">Kind<select value={f.type} onChange={(e) => set("type", e.target.value)}>{INT_TYPE.map((s) => <option key={s} value={s}>{SINGULAR[s]}</option>)}</select></div>
+          {editing && <div className="ht-field">Section<select value={f.type} onChange={(e) => set("type", e.target.value)}>{INT_TYPE.map((s) => <option key={s} value={s}>{KIND_LABEL[s]}</option>)}</select></div>}
           {formAct ? (
             <div className="ht-field" style={{ flex: 2 }}>Details<input value={f.doseNote} onChange={(e) => set("doseNote", e.target.value)} placeholder="30 min, easy pace" /></div>
           ) : <>
@@ -209,8 +210,9 @@ function Interventions({ kind, data, save, openWindow }) {
   );
 }
 
-function Foods({ data, save, openWindow }) {
-  const blank = { name: "", category: "", status: "unknown", confidence: "low", lastTested: "" };
+function Foods({ kind, data, save, openWindow }) {
+  const drink = kind === "drink";
+  const blank = { name: "", kind, size: "", category: "", status: "unknown", confidence: "low", lastTested: "" };
   const narrow = useNarrow();
   const [f, setF] = useState(blank);
   const [warn, setWarn] = useState("");
@@ -219,7 +221,7 @@ function Foods({ data, save, openWindow }) {
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
   const block = () => setWarn(`${openWindow.name} is already being tested. Two changes at once means neither result can be trusted — close that one first.`);
   const closeForm = () => { setF(blank); setEditing(null); setAdding(false); };
-  const startEdit = (x) => { setF({ name: x.name, category: x.category || "", status: x.status, confidence: x.confidence, lastTested: x.lastTested || "" }); setEditing(x.id); setAdding(true); setWarn(""); };
+  const startEdit = (x) => { setF({ name: x.name, kind: x.kind || "food", size: x.size || "", category: x.category || "", status: x.status, confidence: x.confidence, lastTested: x.lastTested || "" }); setEditing(x.id); setAdding(true); setWarn(""); };
   const submit = () => {
     if (!f.name.trim()) return;
     const cur = editing ? data.foods.find((x) => x.id === editing) : null;
@@ -237,42 +239,44 @@ function Foods({ data, save, openWindow }) {
   };
   const remove = (id) => save({ ...data, foods: data.foods.filter((x) => x.id !== id) });
   const order = { testing: 0, "not tolerated": 1, unknown: 2, tolerated: 3 };
-  const sorted = [...data.foods].sort((a, b) => order[a.status] - order[b.status] || a.name.localeCompare(b.name));
+  const mine = data.foods.filter((x) => (x.kind || "food") === kind);
+  const sorted = [...mine].sort((a, b) => order[a.status] - order[b.status] || a.name.localeCompare(b.name));
   const statusSelect = (x) => <select value={x.status} onChange={(e) => setStatus(x.id, e.target.value)} className={`pill ${x.status.replace(" ", "-")}`}>{FOOD_STATUS.map((s) => <option key={s}>{s}</option>)}</select>;
   const actions = (x) => <><button className="ht-link" onClick={() => startEdit(x)}>Edit</button><button className="ht-link" onClick={() => remove(x.id)}>Remove</button></>;
 
   return (
     <div className="card">
       <div className="card-head">
-        <h3>Foods</h3>
-        <button className="btn ghost sm" onClick={() => adding ? closeForm() : setAdding(true)}>{adding ? "Cancel" : "Add food"}</button>
+        <h3>{drink ? "Drinks" : "Foods"}</h3>
+        <button className="btn ghost sm" onClick={() => adding ? closeForm() : setAdding(true)}>{adding ? "Cancel" : "Add"}</button>
       </div>
       {warn && <p className="warn">{warn}</p>}
       {adding && <div className="addform">
         {editing && <p className="hint" style={{ margin: "0 0 8px" }}>Editing <b>{data.foods.find((x) => x.id === editing)?.name}</b></p>}
         <div className="ht-row">
-          <div className="ht-field">Food<input value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="White rice" autoFocus /></div>
-          <div className="ht-field">Category<input value={f.category} onChange={(e) => set("category", e.target.value)} placeholder="Grain" /></div>
+          <div className="ht-field">{drink ? "Drink" : "Food"}<input value={f.name} onChange={(e) => set("name", e.target.value)} placeholder={drink ? "Coffee" : "White rice"} autoFocus /></div>
+          {drink && <div className="ht-field">Usual size<input value={f.size} onChange={(e) => set("size", e.target.value)} placeholder="12 oz" /></div>}
+          <div className="ht-field">Category<input value={f.category} onChange={(e) => set("category", e.target.value)} placeholder={drink ? "Caffeinated" : "Grain"} /></div>
           <div className="ht-field">Status<select value={f.status} onChange={(e) => set("status", e.target.value)}>{FOOD_STATUS.map((s) => <option key={s}>{s}</option>)}</select></div>
           <div className="ht-field">Confidence<select value={f.confidence} onChange={(e) => set("confidence", e.target.value)}>{CONFIDENCE.map((s) => <option key={s}>{s}</option>)}</select></div>
           <div className="ht-field">Last tested<input type="date" value={f.lastTested} onChange={(e) => set("lastTested", e.target.value)} /></div>
         </div>
-        <button className="btn sm" onClick={submit} style={{ marginBottom: 10 }}>{editing ? "Save changes" : "Save food"}</button>
+        <button className="btn sm" onClick={submit} style={{ marginBottom: 10 }}>{editing ? "Save changes" : "Save"}</button>
       </div>}
-      {sorted.length === 0 ? <p className="empty">Nothing here yet. Start with the foods you already know are safe — that's your baseline.</p> : narrow ? (
+      {sorted.length === 0 ? (!adding && <p className="empty">{drink ? "Drinks you have regularly. Saved here, they show up under Repeat on the Day view, and one can be tested like a food." : "Nothing here yet. Start with the foods you already know are safe — that's your baseline."}</p>) : narrow ? (
         <div className="llist">
           {sorted.map((x) => (
             <CompactRow key={x.id} name={x.name} pill={statusSelect(x)}
-              sub={[x.category, `${x.confidence} confidence`, x.lastTested ? `tested ${x.lastTested}` : null].filter(Boolean).join(" · ")}
-              kv={[["Category", x.category || "—"], ["Confidence", x.confidence], ["Last tested", x.lastTested || "—"]]}
+              sub={[x.size, x.category, `${x.confidence} confidence`, x.lastTested ? `tested ${x.lastTested}` : null].filter(Boolean).join(" · ")}
+              kv={[...(drink ? [["Usual size", x.size || "—"]] : []), ["Category", x.category || "—"], ["Confidence", x.confidence], ["Last tested", x.lastTested || "—"]]}
               actions={actions(x)} />
           ))}
         </div>
       ) : (
-        <div className="tscroll"><table className="t"><thead><tr><th>Food</th><th>Category</th><th>Status</th><th>Confidence</th><th>Last tested</th><th></th></tr></thead>
+        <div className="tscroll"><table className="t"><thead><tr><th>{drink ? "Drink" : "Food"}</th>{drink && <th>Usual size</th>}<th>Category</th><th>Status</th><th>Confidence</th><th>Last tested</th><th></th></tr></thead>
           <tbody>{sorted.map((x) => (
             <tr key={x.id}>
-              <td>{x.name}</td><td style={{ color: "var(--mute)" }}>{x.category || "—"}</td>
+              <td>{x.name}</td>{drink && <td>{x.size || "—"}</td>}<td style={{ color: "var(--mute)" }}>{x.category || "—"}</td>
               <td>{statusSelect(x)}</td>
               <td>{x.confidence}</td><td>{x.lastTested || "—"}</td>
               <td style={{ whiteSpace: "nowrap" }}>{actions(x)}</td>
