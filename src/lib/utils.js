@@ -1,6 +1,6 @@
 // Shared helpers and constants. Pure functions only — nothing here touches
 // storage or React. Every other module imports what it needs from here.
-import { parseDose } from "./dose.js";
+import { parseDose, normUnit } from "./dose.js";
 
 export const KEY = "health-tracker-v1";
 export const iso = (d) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`; };
@@ -18,12 +18,16 @@ export function migrate(raw) {
   const stamp = (r) => ({ ...r, id: r.id || uid(), updatedAt: r.updatedAt || now() });
   d.foods = (d.foods || []).map(stamp);
   // Free-text doses ("200 mg, evening") become numbers the first time they're seen.
-  d.interventions = (d.interventions || []).map((i) => (i.doseAmount == null && !i.doseNote && i.dose) ? { ...stamp(i), ...parseDose(i.dose) } : stamp(i));
+  // Old kinds map forward; every item gets a schedule (null days = every day).
+  d.interventions = (d.interventions || []).map((i0) => {
+    const i = (i0.doseAmount == null && !i0.doseNote && i0.dose) ? { ...stamp(i0), ...parseDose(i0.dose) } : stamp(i0);
+    return { ...i, doseUnit: normUnit(i.doseUnit), type: OLD_TYPE[i.type] || i.type, dosesPerDay: i.dosesPerDay || 1, days: i.days?.length ? i.days : null, times: i.times || [] };
+  });
   d.meals = (d.meals || []).map((m) => ({ ...stamp(m), planKey: m.planKey || `${m.meal}|${m.items}` }));
   d.workouts = (d.workouts || []).map((w) => ({ ...stamp(w), planKey: w.planKey || `${w.workout}|${w.details}` }));
   d.entries = (d.entries || []).map((e) => {
     const { sleep, ...rest } = e;
-    return { ...stamp(rest), doses: rest.doses || {}, extras: (rest.extras || []).map(stamp), extraWorkouts: (rest.extraWorkouts || []).map(stamp) };
+    return { ...stamp(rest), doses: rest.doses || {}, drinks: rest.drinks || [], activityStatus: rest.activityStatus || {}, extras: (rest.extras || []).map(stamp), extraWorkouts: (rest.extraWorkouts || []).map(stamp) };
   });
   d.deleted = d.deleted || [];
   d.schema = SCHEMA;
@@ -31,10 +35,37 @@ export function migrate(raw) {
 }
 export const FOOD_STATUS = ["tolerated", "not tolerated", "unknown", "testing"];
 export const CONFIDENCE = ["low", "medium", "high"];
-export const INT_TYPE = ["supplement", "western", "naturopathic", "lifestyle"];
+// Kinds of things in the Index. Each gets its own section there and its own
+// group in the Day view's routine. Activities are marked done / modified /
+// skipped; everything else is checked off with an amount.
+export const INT_TYPE = ["supplement", "medication", "treatment", "activity"];
+export const KIND_LABEL = { supplement: "Supplements", medication: "Medications", treatment: "Treatments", activity: "Activities" };
+const OLD_TYPE = { western: "medication", naturopathic: "treatment", lifestyle: "activity" };
+export const isActivity = (i) => i.type === "activity" || i.type === "lifestyle";
+
+// Scheduling. days: null = every day, else weekday numbers 0 (Sun) .. 6 (Sat).
+export const DAY_SHORT = ["S", "M", "T", "W", "T", "F", "S"];
+export const DAY_NAME = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+export const weekday = (ds) => new Date(ds + "T12:00:00").getDay();
+export const scheduledOn = (i, ds) => !i.days || !i.days.length || i.days.includes(weekday(ds));
+export const fmtTime = (t) => {
+  if (!t) return "";
+  const [h, m] = t.split(":").map(Number);
+  return `${((h + 11) % 12) + 1}${m ? ":" + String(m).padStart(2, "0") : ""}${h < 12 ? "a" : "p"}`;
+};
+export function scheduleLabel(i) {
+  const d = !i.days || !i.days.length || i.days.length === 7 ? "Daily"
+    : [...i.days].sort().join() === "1,2,3,4,5" ? "Weekdays"
+    : [...i.days].sort().join() === "0,6" ? "Weekends"
+    : [...i.days].sort().map((n) => DAY_NAME[n]).join(", ");
+  const t = (i.times || []).filter(Boolean).map(fmtTime).join(", ");
+  return t ? `${d} · ${t}` : d;
+}
 export const INT_STATUS = ["baseline", "testing", "established", "discontinued"];
 export const ACTIVITY = ["rest", "light", "moderate", "hard"];
-export const activeOn = (data, ds) => data.interventions.filter((i) => i.start && i.start <= ds && (!i.end || i.end >= ds) && i.status !== "discontinued");
+// On the routine for a given day: started, not ended, not discontinued, and
+// scheduled for that weekday.
+export const activeOn = (data, ds) => data.interventions.filter((i) => i.start && i.start <= ds && (!i.end || i.end >= ds) && i.status !== "discontinued" && scheduledOn(i, ds));
 export const isOn = (i) => !i.end || i.end >= today();
 export const mealKey = (m) => `${m.meal}|${m.items}`;
 export const mealsOn = (data, e, ds) => {
@@ -65,7 +96,7 @@ export const normDate = (d) => {
 };
 export const logged = (e) => e && e.energy != null;
 export const adherence = (data, e, ds) => {
-  const due = activeOn(data, ds).filter((i) => i.type !== "lifestyle");
+  const due = activeOn(data, ds).filter((i) => !isActivity(i));
   if (!due.length) return null;
   const taken = (e?.taken || []).filter((id) => due.some((i) => i.id === id)).length;
   return { taken, due: due.length };

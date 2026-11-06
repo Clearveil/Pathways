@@ -2,7 +2,7 @@
 // when that is true and "no clear difference" when that is the result.
 // Never inflate a weak signal into a recommendation.
 
-import { today, addDays, now, mealsOn, workoutsOn, logged, adherence } from "./utils.js";
+import { today, addDays, now, mealsOn, workoutsOn, logged, adherence, isActivity, scheduledOn } from "./utils.js";
 
 export function buildInsights(data) {
   const out = [];
@@ -11,12 +11,27 @@ export function buildInsights(data) {
   const avg = (a) => a.length ? a.reduce((s, e) => s + e.energy, 0) / a.length : null;
   const flareRate = (a) => a.length ? a.filter((e) => e.flare).length / a.length : null;
   const inf = (a) => { const b = a.filter((e) => e.inflammation != null); return b.length ? b.reduce((s, e) => s + e.inflammation, 0) / b.length : null; };
-  const clar = (a) => { const b = a.filter((e) => e.clarity != null); return b.length ? b.reduce((s, e) => s + e.clarity, 0) / b.length : null; };
-  // Secondary measures appended to every comparison, so a test window or a
-  // regimen gap is judged on inflammation and mental clarity too, not just energy.
+  const mean = (k) => (a) => { const b = a.filter((e) => e[k] != null); return b.length ? b.reduce((s, e) => s + e[k], 0) / b.length : null; };
+  const clar = mean("clarity");
+  const strs = mean("stress");
+  // Secondary measures appended to every comparison, so a test window, a
+  // regimen gap, a drink or an activity is judged on inflammation, mental
+  // clarity and stress too, not just energy.
   const infTxt = (a, b) =>
     ((inf(a) != null && inf(b) != null) ? ` Inflammation ${inf(a).toFixed(1)} vs ${inf(b).toFixed(1)}.` : "") +
-    ((clar(a) != null && clar(b) != null) ? ` Mental clarity ${clar(a).toFixed(1)} vs ${clar(b).toFixed(1)}.` : "");
+    ((clar(a) != null && clar(b) != null) ? ` Mental clarity ${clar(a).toFixed(1)} vs ${clar(b).toFixed(1)}.` : "") +
+    ((strs(a) != null && strs(b) != null) ? ` Stress ${strs(a).toFixed(1)} vs ${strs(b).toFixed(1)}.` : "");
+  const byDateAll = Object.fromEntries(E.map((e) => [e.date, e]));
+  const nextDays = (arr) => arr.map((e) => byDateAll[addDays(e.date, 1)]).filter(Boolean);
+  // Biggest gap across all four measures, signed so positive = better.
+  const gap = (a, b) => {
+    const parts = [avg(a) != null && avg(b) != null ? avg(a) - avg(b) : null,
+      inf(a) != null && inf(b) != null ? inf(b) - inf(a) : null,
+      clar(a) != null && clar(b) != null ? clar(a) - clar(b) : null,
+      strs(a) != null && strs(b) != null ? strs(b) - strs(a) : null].filter((x) => x != null);
+    return parts.reduce((m, x) => Math.abs(x) > Math.abs(m) ? x : m, 0);
+  };
+  const toneOf = (g) => g > 0.8 ? "up" : g < -0.8 ? "down" : "flat";
   const inRange = (s, e) => E.filter((x) => x.date >= s && x.date <= e);
 
   if (n === 0) { out.push({ tone: "flat", title: "Nothing to read yet", body: "Insights appear once there's data. The first two weeks are baseline — the goal is to see what a normal week looks like before changing anything." }); return out; }
@@ -50,11 +65,35 @@ export function buildInsights(data) {
           const bits = [];
           if (hardF != null && hardC != null && Math.abs(hardF - hardC) >= 25) bits.push(`moderate or hard activity the day before ${hardF}% of foggy days vs ${hardC}% of clear ones`);
           if (extF != null && extC != null && Math.abs(extF - extC) >= 25) bits.push(`unplanned food the day before ${extF}% vs ${extC}%`);
-          body += bits.length ? ` The day before matters: ${bits.join("; ")}.` : " Nothing in the day before (activity, unplanned food) separates foggy days from clear ones so far.";
+          const stF = pct(fb.filter((e) => e.stress != null), (e) => e.stress >= 7), stC = pct(cb.filter((e) => e.stress != null), (e) => e.stress >= 7);
+          if (stF != null && stC != null && Math.abs(stF - stC) >= 25) bits.push(`high stress (7+) the day before ${stF}% vs ${stC}%`);
+          body += bits.length ? ` The day before matters: ${bits.join("; ")}.` : " Nothing in the day before (activity, unplanned food, stress) separates foggy days from clear ones so far.";
           if (bits.length) tone = "down";
         }
       } else if (foggy.length < 3) body += " Not enough foggy days to compare against — which is good news.";
       out.push({ tone, title: "Mental clarity", body });
+    }
+  }
+
+  // Stress: what high-stress days look like, and what follows them
+  {
+    const S = E.filter((e) => e.stress != null);
+    if (S.length >= 10) {
+      const hi = S.filter((e) => e.stress >= 7), lo = S.filter((e) => e.stress <= 3);
+      let body = `${hi.length} high-stress day${hi.length === 1 ? "" : "s"} (7 or above) and ${lo.length} calm ones (3 or below) out of ${S.length} rated.`;
+      let tone = "flat";
+      if (hi.length >= 3 && lo.length >= 3) {
+        const sameDay = infTxt(hi, lo).replace(/ Stress [\d.]+ vs [\d.]+\./, "");
+        body += ` Same day: energy ${avg(hi).toFixed(1)} vs ${avg(lo).toFixed(1)}.${sameDay}`;
+        const ha = nextDays(hi), la = nextDays(lo);
+        if (ha.length >= 3 && la.length >= 3) {
+          const fh = flareRate(ha), fl = flareRate(la);
+          body += ` The day after: energy ${avg(ha).toFixed(1)} vs ${avg(la).toFixed(1)}, flares ${Math.round(fh * 100)}% vs ${Math.round(fl * 100)}%.`;
+          tone = toneOf(gap(ha, la));
+          body += (fh - fl > 0.2) ? " Stress is showing up as next-day flares — a lever worth knowing about, even if it isn't an easy one." : tone === "down" ? " High-stress days cost you the next day too." : " No clear next-day cost so far.";
+        }
+      } else body += " Not enough of both kinds of day to compare yet.";
+      out.push({ tone, title: "Stress", body });
     }
   }
 
@@ -115,8 +154,8 @@ export function buildInsights(data) {
 
     // per-supplement missed vs taken
     const byDate = Object.fromEntries(E.map((e) => [e.date, e]));
-    data.interventions.filter((i) => i.type !== "lifestyle").forEach((i) => {
-      const days = E.filter((e) => i.start && i.start <= e.date && (!i.end || i.end >= e.date));
+    data.interventions.filter((i) => !isActivity(i)).forEach((i) => {
+      const days = E.filter((e) => i.start && i.start <= e.date && (!i.end || i.end >= e.date) && scheduledOn(i, e.date));
       const took = days.filter((e) => e.taken?.includes(i.id)), skip = days.filter((e) => !e.taken?.includes(i.id));
       if (took.length < 4 || skip.length < 3) return;
       const nextAfter = (arr) => arr.map((e) => byDate[addDays(e.date, 1)]).filter(Boolean);
@@ -126,6 +165,44 @@ export function buildInsights(data) {
       const tone = same > 0.8 || (next != null && next > 0.8) ? "up" : same < -0.8 || (next != null && next < -0.8) ? "down" : "flat";
       out.push({ tone, title: `${i.name} — taken vs missed`, body: `Missed ${skip.length} of ${days.length} days. Energy ${avg(took).toFixed(1)} on days taken vs ${avg(skip).toFixed(1)} on days missed${next != null ? `; the following day ${avg(ta).toFixed(1)} vs ${avg(sa).toFixed(1)}` : ""}.${infTxt(took, skip)} ${tone === "up" ? "Missing it seems to cost you." : tone === "down" ? "You do better without it. That's worth a deliberate test — switch it off for two weeks and watch." : "Missing it doesn't seem to move anything."}` });
     });
+  }
+
+  // Routine activities: done vs skipped. Skipping is data, not failure —
+  // the question is only whether doing it changes how you feel.
+  data.interventions.filter(isActivity).forEach((i) => {
+    const days = E.filter((e) => i.start && i.start <= e.date && (!i.end || i.end >= e.date) && scheduledOn(i, e.date) && (e.activityStatus || {})[i.id]);
+    if (days.length < 7) return;
+    const st = (e) => e.activityStatus[i.id];
+    const did = days.filter((e) => st(e) === "done" || st(e) === "modified"), skip = days.filter((e) => st(e) === "skipped");
+    let body = `Done ${days.filter((e) => st(e) === "done").length}, modified ${days.filter((e) => st(e) === "modified").length}, skipped ${skip.length} of ${days.length} scheduled days.`;
+    let tone = "flat";
+    if (did.length >= 4 && skip.length >= 3) {
+      const da = nextDays(did), sa = nextDays(skip);
+      body += ` Same day: energy ${avg(did).toFixed(1)} vs ${avg(skip).toFixed(1)} when skipped — but you likely skip on low days, so the same-day number mostly shows how you felt going in.`;
+      if (da.length >= 3 && sa.length >= 3) {
+        tone = toneOf(gap(da, sa));
+        body += ` The day after is the fairer test: energy ${avg(da).toFixed(1)} vs ${avg(sa).toFixed(1)}.${infTxt(da, sa)} ${tone === "up" ? "Doing it seems to help the next day." : tone === "down" ? "It seems to cost you the next day. Worth trying a smaller version." : "No clear next-day difference."}`;
+      }
+    } else body += " Not enough skipped days to compare — keep going and this fills in.";
+    out.push({ tone, title: `${i.name} — done vs skipped`, body });
+  });
+
+  // Drinks: each drink you log often, days with it vs days without
+  {
+    const by = {};
+    E.forEach((e) => (e.drinks || []).forEach((d) => { const k = d.name.toLowerCase().trim(); (by[k] ||= new Set()).add(e.date); }));
+    const lines = [];
+    let biggest = 0;
+    Object.entries(by).forEach(([k, set]) => {
+      const withD = E.filter((e) => set.has(e.date)), without = E.filter((e) => !set.has(e.date));
+      if (withD.length < 4 || without.length < 4) return;
+      const wa = nextDays(withD), oa = nextDays(without);
+      const same = gap(withD, without), next = wa.length >= 3 && oa.length >= 3 ? gap(wa, oa) : null;
+      const g = next != null && Math.abs(next) > Math.abs(same) ? next : same;
+      if (Math.abs(g) > Math.abs(biggest)) biggest = g;
+      lines.push(`${k} (${withD.length} days): energy ${avg(withD).toFixed(1)} vs ${avg(without).toFixed(1)} without${next != null ? `, next day ${avg(wa).toFixed(1)} vs ${avg(oa).toFixed(1)}` : ""}${Math.abs(g) > 0.8 ? (g > 0 ? " — looks better with it" : " — looks worse with it") : ""}`);
+    });
+    if (lines.length) out.push({ tone: toneOf(biggest), title: "Drinks", body: lines.join(". ") + ". Each is compared on energy, inflammation, clarity and stress; under about 1 point is noise at this sample size." });
   }
 
   // Meal plan adherence

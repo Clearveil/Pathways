@@ -28,6 +28,8 @@ export default function Week({ data, date, setDate, goDay }) {
               {(() => { const a = adherence(data, e, ds); return a && ds <= today() ? <span className="meta" style={{ color: a.taken === a.due ? "var(--acc-ink)" : a.taken === 0 ? "var(--bad)" : "var(--ink2)" }}>Regimen {a.taken}/{a.due}</span> : null; })()}
               {e?.inflammation && <span className="meta">Inflammation {e.inflammation}</span>}
               {e?.clarity && <span className="meta">Clarity {e.clarity}</span>}
+              {e?.stress && <span className="meta">Stress {e.stress}</span>}
+              {(e?.drinks || []).length > 0 && <span className="meta">{e.drinks.reduce((s, d) => s + (d.qty || 1), 0)} drinks</span>}
               {e?.flare && <span className="meta flare">Flare · {e.severity}/5</span>}
               {e?.activity && <span className="meta">{e.activity[0].toUpperCase() + e.activity.slice(1)}{e.activityNote ? ` · ${e.activityNote}` : ""}</span>}
               {testingOn(data, ds) && <span className="meta" style={{ color: "var(--acc-ink)" }}><Flask size={11} /> Testing {testingOn(data, ds)}</span>}

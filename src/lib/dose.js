@@ -3,11 +3,11 @@
 // that reads it breaks. Per day, entries.doses records the amount actually
 // taken, which is what makes "I tried 400 instead of 200" a real data point.
 
-export const DOSE_UNITS = ["mg", "mcg", "g", "IU", "ml", "drops", "capsule", "tablet", "scoop", "serving"];
-const COUNT_UNITS = ["capsule", "tablet", "scoop", "serving"];
+export const DOSE_UNITS = ["mg", "mcg", "g", "IU", "ml", "drops", "capsule", "tablet", "pill", "scoop", "serving"];
+const COUNT_UNITS = ["capsule", "tablet", "pill", "scoop", "serving"];
 const ALIASES = {
   "µg": "mcg", ug: "mcg", iu: "IU", cap: "capsule", caps: "capsule", capsules: "capsule",
-  tab: "tablet", tabs: "tablet", tablets: "tablet", drop: "drops", scoops: "scoop", servings: "serving",
+  tab: "tablet", tabs: "tablet", tablets: "tablet", pills: "pill", pill: "pill", drop: "drops", scoops: "scoop", servings: "serving",
   gram: "g", grams: "g", milligram: "mg", milligrams: "mg", microgram: "mcg", micrograms: "mcg",
 };
 
@@ -45,4 +45,15 @@ export function doseStep(amount, unit) {
   const target = amount / 4;
   const nice = [0.25, 0.5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000];
   return nice.reduce((best, n) => (Math.abs(n - target) < Math.abs(best - target) ? n : best), nice[0]);
+}
+
+// Split doses. An item taken "in 3 doses" has a portion of amount / 3; the
+// Day view checks it off one portion at a time. Countable units round to
+// the nearest half so "4 capsules in 3 doses" doesn't show 1.33 capsules.
+export const partsOf = (i) => Math.max(1, i.dosesPerDay || 1);
+export function portionOf(i) {
+  if (i.doseAmount == null) return null;
+  const p = i.doseAmount / partsOf(i);
+  if (COUNT_UNITS.includes(i.doseUnit) || i.doseUnit === "drops") return Math.max(0.5, Math.round(p * 2) / 2);
+  return Math.round(p * 100) / 100;
 }

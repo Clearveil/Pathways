@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#FFFFFF" />
+    <script>
+      // iPhone/iPad only: Safari zooms the page into any field smaller than
+      // 16px when it's tapped, then back out, which feels like the screen
+      // jumping. maximum-scale stops that auto-zoom; iOS still allows pinch
+      // zoom, so nothing is lost. Android doesn't auto-zoom, so it's untouched.
+      if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) {
+        document.querySelector('meta[name="viewport"]').setAttribute("content", "width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover");
+      }
+    </script>
     <!-- iOS "Add to Home Screen": icon, fullscreen, and the name under the icon -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="mobile-web-app-capable" content="yes" />

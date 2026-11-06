@@ -63,7 +63,7 @@ export const css = `
   .pill.testing { background:var(--warn-soft); color:var(--warn-ink); }
   .pill.unknown,.pill.baseline { background:var(--bg2); color:var(--ink2); }
   .check { list-style:none; margin:0; padding:0; font-size:13px; }
-  .check li { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line2); cursor:pointer; user-select:none; }
+  .check li { display:flex; align-items:center; gap:10px; min-height:42px; padding:8px 0; border-bottom:1px solid var(--line2); cursor:pointer; user-select:none; }
   .check li:last-child { border-bottom:0; }
   .check .box { width:18px; height:18px; border:1.5px solid var(--line); border-radius:5px; display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--on-acc); flex-shrink:0; transition:background .12s, border-color .12s; }
   .check li:hover .box { border-color:var(--acc); }
@@ -161,7 +161,6 @@ export const css = `
   .list li.editing { background:var(--acc-soft); margin:0 -8px; padding-left:8px; padding-right:8px; border-radius:8px; }
   .dose-ctl button:disabled { opacity:.35; cursor:default; }
   .mob-only { display:none; }
-  .ht-msg { margin:8px 14px 0; font-size:12px; color:var(--mute); }
   .menu button svg { vertical-align:-3px; margin-right:6px; }
   .menu-head { padding:8px 10px 9px; font-size:12px; color:var(--ink); border-bottom:1px solid var(--line2); margin-bottom:3px; word-break:break-all; }
   .menu-head small { display:block; color:var(--mute); margin-top:2px; }
@@ -204,7 +203,42 @@ export const css = `
   .dose-fields { display:flex; gap:8px; }
   .dose-fields input[type=number] { width:84px; }
   .dose-fields select { width:auto; }
+
+  /* --- feel: no tap highlight, no double-tap zoom delay --- */
+  .ht { -webkit-tap-highlight-color:transparent; }
+  .ht button, .ht select, .ht li, .ht a { touch-action:manipulation; }
+  /* --- floating message: never takes space in the layout --- */
+  .toast { position:fixed; left:50%; bottom:calc(18px + env(safe-area-inset-bottom)); transform:translate(-50%, 8px); background:var(--ink); color:var(--bg); font-size:13px; padding:8px 14px; border-radius:999px; box-shadow:0 6px 20px var(--shadow); opacity:0; pointer-events:none; transition:opacity .18s, transform .18s; z-index:60; max-width:calc(100% - 32px); text-align:center; }
+  .toast.show { opacity:1; transform:translate(-50%, 0); }
+  .toast:empty { display:none; }
+  /* --- shared card header --- */
+  .card-head { display:flex; align-items:center; gap:10px; }
+  .card-head h3 { flex:1; margin-bottom:0; }
+  .inline-add { background:var(--bg2); border-radius:10px; padding:10px 12px 2px; margin-top:10px; }
+  /* --- drinks quick re-add --- */
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .chip { font:inherit; font-size:12px; border:1px solid var(--line); background:var(--field); color:var(--ink2); border-radius:999px; padding:5px 10px; cursor:pointer; }
+  .chip:hover { border-color:var(--acc); color:var(--acc); }
+  /* --- routine --- */
+  .rgroup + .rgroup { margin-top:6px; }
+  .rgroup-head { font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--mute); margin:10px 0 0; }
+  .rname { flex:1; min-width:0; }
+  .time-chip { display:inline-block; margin-left:6px; font-size:11px; color:var(--mute); border:1px solid var(--line2); border-radius:6px; padding:0 5px; vertical-align:1px; }
+  .dose-ctl .amt small { color:var(--mute); font-size:10px; margin-left:2px; }
+  /* --- schedule fields --- */
+  .daypick { display:flex; gap:4px; }
+  .daypick button { flex:1 1 0; min-width:0; max-width:40px; }
+  .daypick button { width:32px; height:34px; border:1px solid var(--line); background:var(--field); border-radius:8px; font:inherit; font-size:12px; color:var(--mute); cursor:pointer; padding:0; }
+  .daypick button.on { background:var(--acc); border-color:var(--acc); color:var(--on-acc); }
+  .time-fields { display:flex; gap:6px; flex-wrap:wrap; }
+  .time-fields input { width:118px; }
+  /* --- trends series toggles --- */
+  .series { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 8px; }
+  .series button { font:inherit; font-size:12px; border:1px solid var(--line); background:var(--card); color:var(--mute); border-radius:999px; padding:4px 10px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+  .series button.on { color:var(--ink); border-color:var(--ink2); }
+  .series svg { display:block; }
   @media (max-width:720px) {
+    .daypick button { width:36px; height:36px; }
     .ht-top { padding:calc(14px + env(safe-area-inset-top)) 14px 0; }
     .ht-main { padding:12px 14px calc(50px + env(safe-area-inset-bottom)); }
     .ht-day { grid-template-columns:1fr; }
@@ -226,7 +260,6 @@ export const css = `
     .ht-tabs { order:3; }
     .ht-spacer, .desk-only { display:none; }
     .mob-only { display:inline-flex; }
-    p.ht-msg.mob-only { display:block; }
     .menu-text { display:none; }
     .ht-link.with-icon { border:1px solid var(--line); background:var(--card); width:32px; height:32px; padding:0; justify-content:center; }
     .csv-grid { grid-template-columns:1fr; }

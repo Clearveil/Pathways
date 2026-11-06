@@ -1,20 +1,30 @@
 import { useState } from "react";
-import { today, addDays, uid, FOOD_STATUS, CONFIDENCE, INT_TYPE, INT_STATUS, isOn } from "../lib/utils.js";
+import { today, addDays, uid, FOOD_STATUS, CONFIDENCE, INT_TYPE, INT_STATUS, KIND_LABEL, DAY_SHORT, isOn, isActivity, scheduleLabel } from "../lib/utils.js";
 import { useNarrow } from "../lib/useNarrow.js";
-import { DOSE_UNITS, doseLabel } from "../lib/dose.js";
+import { DOSE_UNITS, doseLabel, partsOf } from "../lib/dose.js";
+
+// The Index is where everything is defined once: what it is, how much, how
+// it's taken, and when. The switch puts it on the routine; the Day view then
+// shows whatever is on and scheduled for that day.
+const EMPTY_HINT = {
+  supplement: "Add everything you currently take as baseline first, so the trends chart has context.",
+  medication: "Prescriptions and over-the-counter meds. Same rules: one change at a time.",
+  treatment: "Sauna, IV, acupuncture, red light, anything done to you or for you on a schedule.",
+  activity: "Walks, workouts, stretching, cold plunges. Scheduled here, they appear in today's routine without importing a plan.",
+};
+const SINGULAR = { supplement: "supplement", medication: "medication", treatment: "treatment", activity: "activity" };
 
 export default function Library({ data, save, openWindow }) {
   return (
     <div className="lib">
-      <Interventions data={data} save={save} openWindow={openWindow} />
+      {INT_TYPE.map((kind) => <Interventions key={kind} kind={kind} data={data} save={save} openWindow={openWindow} />)}
       <Foods data={data} save={save} openWindow={openWindow} />
     </div>
   );
 }
 
 // One expandable row for phones: a compact line (name, summary, status) that
-// opens into the full labelled detail. `head` is the summary line, `kv` the
-// label/value pairs shown when open, `actions` the Edit/Remove links.
+// opens into the full labelled detail.
 function CompactRow({ off, lead, name, sub, pill, kv, actions }) {
   const [open, setOpen] = useState(false);
   return (
@@ -29,6 +39,171 @@ function CompactRow({ off, lead, name, sub, pill, kv, actions }) {
           {kv.map(([k, v]) => <div className="kv" key={k}><b>{k}</b><span>{v}</span></div>)}
           <div className="lrow-actions">{actions}</div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// Weekday picker. All seven lit means every day (stored as null).
+function DayPicker({ days, onChange }) {
+  const on = (n) => !days || days.includes(n);
+  const toggle = (n) => {
+    const cur = days || [0, 1, 2, 3, 4, 5, 6];
+    const next = cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n].sort();
+    onChange(next.length === 7 || next.length === 0 ? null : next);
+  };
+  return (
+    <div className="daypick">
+      {DAY_SHORT.map((d, n) => <button key={n} type="button" className={on(n) ? "on" : ""} onClick={() => toggle(n)} aria-pressed={on(n)}>{d}</button>)}
+    </div>
+  );
+}
+
+function Interventions({ kind, data, save, openWindow }) {
+  const act = kind === "activity";
+  const blank = { name: "", type: kind, doseAmount: "", doseUnit: act ? "" : "mg", doseNote: "", dosesPerDay: 1, days: null, times: [], start: today(), end: "", source: "", status: "baseline" };
+  const narrow = useNarrow();
+  const [f, setF] = useState(blank);
+  const [warn, setWarn] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [doseChange, setDoseChange] = useState(null); // { patch, from, to } awaiting "test or just update?"
+  const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+  const block = () => setWarn(`${openWindow.name} is already being tested. One open test at a time — otherwise you won't know which change did what.`);
+  const closeForm = () => { setF(blank); setEditing(null); setAdding(false); setDoseChange(null); };
+  const startEdit = (x) => {
+    setF({ name: x.name, type: isActivity(x) ? "activity" : x.type, doseAmount: x.doseAmount ?? "", doseUnit: x.doseUnit || "", doseNote: x.doseNote || "", dosesPerDay: x.dosesPerDay || 1, days: x.days || null, times: x.times || [], start: x.start || "", end: x.end || "", source: x.source || "", status: x.status });
+    setEditing(x.id); setAdding(true); setWarn(""); setDoseChange(null);
+  };
+  const applyEdit = (patch) => { save({ ...data, interventions: data.interventions.map((x) => x.id === editing ? { ...x, ...patch } : x) }); closeForm(); };
+  const submit = () => {
+    if (!f.name.trim()) return;
+    const cur = editing ? data.interventions.find((x) => x.id === editing) : null;
+    if (f.status === "testing" && openWindow && cur?.status !== "testing") return block();
+    setWarn("");
+    const patch = { ...f, doseAmount: f.doseAmount === "" ? null : Number(f.doseAmount), times: (f.times || []).slice(0, f.type === "activity" ? 1 : f.dosesPerDay) };
+    patch.dose = doseLabel(patch);
+    if (!editing) { save({ ...data, interventions: [...data.interventions, { ...patch, outcome: "", id: uid() }] }); closeForm(); return; }
+    // A dose change is a change. Offer to make it a test window rather than
+    // letting it slip in silently beside whatever else is going on.
+    const amountChanged = cur?.doseAmount != null && patch.doseAmount != null && patch.doseAmount !== cur.doseAmount;
+    if (amountChanged && cur.status !== "testing" && patch.status !== "testing") { setDoseChange({ patch, from: doseLabel(cur), to: doseLabel(patch) }); return; }
+    applyEdit(patch);
+  };
+  const startDoseTest = () => {
+    if (openWindow) return block();
+    applyEdit({ ...doseChange.patch, status: "testing", start: today(), end: "" });
+  };
+  const update = (id, patch) => {
+    const cur = data.interventions.find((x) => x.id === id);
+    if (patch.status === "testing" && openWindow && cur?.status !== "testing") return block();
+    setWarn("");
+    save({ ...data, interventions: data.interventions.map((x) => x.id === id ? { ...x, ...patch } : x) });
+  };
+  const remove = (id) => save({ ...data, interventions: data.interventions.filter((x) => x.id !== id) });
+  const order = { testing: 0, baseline: 1, established: 2, discontinued: 3 };
+  const mine = data.interventions.filter((x) => (isActivity(x) ? "activity" : x.type) === kind);
+  const sorted = [...mine].sort((a, b) => (isOn(b) - isOn(a)) || order[a.status] - order[b.status] || (b.start || "").localeCompare(a.start || ""));
+  const toggleOn = (x) => {
+    if (isOn(x)) update(x.id, { end: addDays(today(), -1) });
+    else update(x.id, { end: "", start: x.start || today(), status: x.status === "discontinued" ? "baseline" : x.status });
+  };
+  const onCount = mine.filter(isOn).length;
+  const amountText = (x) => act ? (x.doseNote || "—") : (doseLabel(x) ? `${doseLabel(x)}${partsOf(x) > 1 ? ` · in ${partsOf(x)} doses` : ""}` : "—");
+  const onSwitch = (x) => <button className={"switch" + (isOn(x) ? " on" : "")} onClick={() => toggleOn(x)} title={isOn(x) ? "On the routine — switch off" : "Off the routine — switch on"} />;
+  const statusSelect = (x) => <select value={x.status} onChange={(e) => update(x.id, { status: e.target.value })} className={`pill ${x.status}`}>{INT_STATUS.map((s) => <option key={s}>{s}</option>)}</select>;
+  const endInput = (x) => <input type="date" value={x.end || ""} onChange={(e) => update(x.id, { end: e.target.value })} style={{ width: 118 }} />;
+  const outcomeInput = (x) => <input value={x.outcome || ""} onChange={(e) => update(x.id, { outcome: e.target.value })} placeholder="What happened" style={{ width: 130 }} />;
+  const actions = (x) => <><button className="ht-link" onClick={() => startEdit(x)}>Edit</button><button className="ht-link" onClick={() => remove(x.id)}>Remove</button></>;
+  const formAct = f.type === "activity";
+  const timeSlots = formAct ? 1 : Math.max(1, f.dosesPerDay || 1);
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h3>{KIND_LABEL[kind]} {mine.length > 0 && <span className="hint" style={{ fontWeight: 400 }}>· {onCount} on</span>}</h3>
+        <button className="btn ghost sm" onClick={() => adding ? closeForm() : setAdding(true)}>{adding ? "Cancel" : "Add"}</button>
+      </div>
+      {warn && <p className="warn">{warn}</p>}
+      {adding && <div className="addform">
+        {editing && <p className="hint" style={{ margin: "0 0 8px" }}>Editing <b>{data.interventions.find((x) => x.id === editing)?.name}</b></p>}
+        <div className="ht-row">
+          <div className="ht-field">Name<input value={f.name} onChange={(e) => set("name", e.target.value)} placeholder={formAct ? "Morning walk" : kind === "medication" ? "Low-dose naltrexone" : kind === "treatment" ? "Infrared sauna" : "Magnesium glycinate"} autoFocus /></div>
+          <div className="ht-field">Kind<select value={f.type} onChange={(e) => set("type", e.target.value)}>{INT_TYPE.map((s) => <option key={s} value={s}>{SINGULAR[s]}</option>)}</select></div>
+          {formAct ? (
+            <div className="ht-field" style={{ flex: 2 }}>Details<input value={f.doseNote} onChange={(e) => set("doseNote", e.target.value)} placeholder="30 min, easy pace" /></div>
+          ) : <>
+            <div className="ht-field">Dose
+              <div className="dose-fields">
+                <input type="number" inputMode="decimal" min="0" step="any" value={f.doseAmount} onChange={(e) => set("doseAmount", e.target.value)} placeholder="200" />
+                <select value={f.doseUnit} onChange={(e) => set("doseUnit", e.target.value)}><option value="">unit</option>{[...DOSE_UNITS, ...(f.doseUnit && !DOSE_UNITS.includes(f.doseUnit) ? [f.doseUnit] : [])].map((u) => <option key={u} value={u}>{u}</option>)}</select>
+              </div>
+            </div>
+            <div className="ht-field">How it's taken
+              <select value={f.dosesPerDay} onChange={(e) => set("dosesPerDay", Number(e.target.value))}>
+                <option value={1}>All at once</option>
+                {[2, 3, 4].map((n) => <option key={n} value={n}>Split into {n} doses</option>)}
+              </select>
+            </div>
+          </>}
+        </div>
+        <div className="ht-row">
+          <div className="ht-field" style={{ minWidth: 260 }}>Days<DayPicker days={f.days} onChange={(d) => set("days", d)} /></div>
+          <div className="ht-field">{timeSlots > 1 ? "Times (optional)" : "Time (optional)"}
+            <div className="time-fields">
+              {Array.from({ length: timeSlots }, (_, k) => (
+                <input key={k} type="time" value={(f.times || [])[k] || ""} onChange={(e) => { const t = [...(f.times || [])]; t[k] = e.target.value; set("times", t); }} />
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="ht-row">
+          {!formAct && <div className="ht-field">Dose note<input value={f.doseNote} onChange={(e) => set("doseNote", e.target.value)} placeholder="with food" /></div>}
+          <div className="ht-field">Recommended by<input value={f.source} onChange={(e) => set("source", e.target.value)} placeholder="Practitioner, book, self" /></div>
+        </div>
+        <div className="ht-row">
+          <div className="ht-field">Start<input type="date" value={f.start} onChange={(e) => set("start", e.target.value)} /></div>
+          <div className="ht-field">End<input type="date" value={f.end} onChange={(e) => set("end", e.target.value)} /></div>
+          <div className="ht-field">Status<select value={f.status} onChange={(e) => set("status", e.target.value)}>{INT_STATUS.map((s) => <option key={s}>{s}</option>)}</select></div>
+        </div>
+        <p className="hint" style={{ margin: "-6px 0 10px" }}>Baseline: already doing it, not changing. Testing: the one thing you're evaluating now. The switch puts it on or off the routine without losing its history. {!formAct && "Split doses are checked off one portion at a time in the Day view."}</p>
+        {doseChange ? (
+          <div className="ht-status" style={{ marginBottom: 10 }}>
+            <span>Dose changed from <b>{doseChange.from}</b> to <b>{doseChange.to}</b>. A dose change is a change — start a test window for it, or just update the number?</span>
+          </div>
+        ) : null}
+        {doseChange ? (
+          <div className="day-actions" style={{ marginBottom: 10 }}>
+            <button className="btn sm" onClick={startDoseTest}>Start a test</button>
+            <button className="btn ghost sm" onClick={() => applyEdit(doseChange.patch)}>Just update</button>
+            <button className="ht-link" onClick={() => setDoseChange(null)}>Back</button>
+          </div>
+        ) : <button className="btn sm" onClick={submit} style={{ marginBottom: 10 }}>{editing ? "Save changes" : "Save"}</button>}
+      </div>}
+      {sorted.length === 0 ? (!adding && <p className="empty">{EMPTY_HINT[kind]}</p>) : narrow ? (
+        <div className="llist">
+          {sorted.map((x) => (
+            <CompactRow key={x.id} off={!isOn(x)} lead={onSwitch(x)} name={x.name} pill={statusSelect(x)}
+              sub={[amountText(x) !== "—" ? amountText(x) : null, scheduleLabel(x)].filter(Boolean).join(" · ")}
+              kv={[[act ? "Details" : "Dose", amountText(x)], ["When", scheduleLabel(x)], ["Start", x.start || "—"], ["End", endInput(x)], ["From", x.source || "—"], ["Outcome", outcomeInput(x)]]}
+              actions={actions(x)} />
+          ))}
+        </div>
+      ) : (
+        <div className="tscroll"><table className="t"><thead><tr><th>On</th><th>Name</th><th>{act ? "Details" : "Dose"}</th><th>When</th><th>Start</th><th>End</th><th>Status</th><th>Outcome</th><th></th></tr></thead>
+          <tbody>{sorted.map((x) => (
+            <tr key={x.id} className={isOn(x) ? "" : "off"}>
+              <td>{onSwitch(x)}</td>
+              <td>{x.name}{x.source ? <div className="hint">{x.source}</div> : null}</td>
+              <td>{amountText(x)}</td>
+              <td style={{ color: "var(--ink2)" }}>{scheduleLabel(x)}</td>
+              <td>{x.start || "—"}</td>
+              <td>{endInput(x)}</td>
+              <td>{statusSelect(x)}</td>
+              <td>{outcomeInput(x)}</td>
+              <td style={{ whiteSpace: "nowrap" }}>{actions(x)}</td>
+            </tr>
+          ))}</tbody></table></div>
       )}
     </div>
   );
@@ -68,8 +243,8 @@ function Foods({ data, save, openWindow }) {
 
   return (
     <div className="card">
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <h3 style={{ flex: 1 }}>Foods</h3>
+      <div className="card-head">
+        <h3>Foods</h3>
         <button className="btn ghost sm" onClick={() => adding ? closeForm() : setAdding(true)}>{adding ? "Cancel" : "Add food"}</button>
       </div>
       {warn && <p className="warn">{warn}</p>}
@@ -100,124 +275,6 @@ function Foods({ data, save, openWindow }) {
               <td>{x.name}</td><td style={{ color: "var(--mute)" }}>{x.category || "—"}</td>
               <td>{statusSelect(x)}</td>
               <td>{x.confidence}</td><td>{x.lastTested || "—"}</td>
-              <td style={{ whiteSpace: "nowrap" }}>{actions(x)}</td>
-            </tr>
-          ))}</tbody></table></div>
-      )}
-    </div>
-  );
-}
-
-function Interventions({ data, save, openWindow }) {
-  const blank = { name: "", type: "supplement", doseAmount: "", doseUnit: "mg", doseNote: "", start: today(), end: "", source: "", status: "baseline" };
-  const narrow = useNarrow();
-  const [f, setF] = useState(blank);
-  const [warn, setWarn] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [doseChange, setDoseChange] = useState(null); // { patch, from, to } awaiting "test or just update?"
-  const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
-  const block = () => setWarn(`${openWindow.name} is already being tested. One open test at a time — otherwise you won't know which change did what.`);
-  const closeForm = () => { setF(blank); setEditing(null); setAdding(false); setDoseChange(null); };
-  const startEdit = (x) => { setF({ name: x.name, type: x.type, doseAmount: x.doseAmount ?? "", doseUnit: x.doseUnit || "", doseNote: x.doseNote || "", start: x.start || "", end: x.end || "", source: x.source || "", status: x.status }); setEditing(x.id); setAdding(true); setWarn(""); setDoseChange(null); };
-  const applyEdit = (patch) => { save({ ...data, interventions: data.interventions.map((x) => x.id === editing ? { ...x, ...patch } : x) }); closeForm(); };
-  const submit = () => {
-    if (!f.name.trim()) return;
-    const cur = editing ? data.interventions.find((x) => x.id === editing) : null;
-    if (f.status === "testing" && openWindow && cur?.status !== "testing") return block();
-    setWarn("");
-    const patch = { ...f, doseAmount: f.doseAmount === "" ? null : Number(f.doseAmount) };
-    patch.dose = doseLabel(patch);
-    if (!editing) { save({ ...data, interventions: [...data.interventions, { ...patch, outcome: "", id: uid() }] }); closeForm(); return; }
-    // A dose change is a change. Offer to make it a test window rather than
-    // letting it slip in silently beside whatever else is going on.
-    const amountChanged = cur?.doseAmount != null && patch.doseAmount != null && patch.doseAmount !== cur.doseAmount;
-    if (amountChanged && cur.status !== "testing" && patch.status !== "testing") { setDoseChange({ patch, from: doseLabel(cur), to: doseLabel(patch) }); return; }
-    applyEdit(patch);
-  };
-  const startDoseTest = () => {
-    if (openWindow) return block();
-    applyEdit({ ...doseChange.patch, status: "testing", start: today(), end: "" });
-  };
-  const update = (id, patch) => {
-    const cur = data.interventions.find((x) => x.id === id);
-    if (patch.status === "testing" && openWindow && cur?.status !== "testing") return block();
-    setWarn("");
-    save({ ...data, interventions: data.interventions.map((x) => x.id === id ? { ...x, ...patch } : x) });
-  };
-  const remove = (id) => save({ ...data, interventions: data.interventions.filter((x) => x.id !== id) });
-  const order = { testing: 0, baseline: 1, established: 2, discontinued: 3 };
-  const sorted = [...data.interventions].sort((a, b) => (isOn(b) - isOn(a)) || order[a.status] - order[b.status] || (b.start || "").localeCompare(a.start || ""));
-  const toggleOn = (x) => {
-    if (isOn(x)) update(x.id, { end: addDays(today(), -1) });
-    else update(x.id, { end: "", start: x.start || today(), status: x.status === "discontinued" ? "baseline" : x.status });
-  };
-  const onCount = data.interventions.filter(isOn).length;
-  const onSwitch = (x) => <button className={"switch" + (isOn(x) ? " on" : "")} onClick={() => toggleOn(x)} title={isOn(x) ? "Taking — switch off" : "Not taking — switch on"} />;
-  const statusSelect = (x) => <select value={x.status} onChange={(e) => update(x.id, { status: e.target.value })} className={`pill ${x.status}`}>{INT_STATUS.map((s) => <option key={s}>{s}</option>)}</select>;
-  const endInput = (x) => <input type="date" value={x.end || ""} onChange={(e) => update(x.id, { end: e.target.value })} style={{ width: 118 }} />;
-  const outcomeInput = (x) => <input value={x.outcome || ""} onChange={(e) => update(x.id, { outcome: e.target.value })} placeholder="What happened" style={{ width: 130 }} />;
-  const actions = (x) => <><button className="ht-link" onClick={() => startEdit(x)}>Edit</button><button className="ht-link" onClick={() => remove(x.id)}>Remove</button></>;
-
-  return (
-    <div className="card">
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <h3 style={{ flex: 1 }}>Supplements & treatments <span className="hint" style={{ fontWeight: 400 }}>· {onCount} on</span></h3>
-        <button className="btn ghost sm" onClick={() => adding ? closeForm() : setAdding(true)}>{adding ? "Cancel" : "Add"}</button>
-      </div>
-      {warn && <p className="warn">{warn}</p>}
-      {adding && <div className="addform">
-        {editing && <p className="hint" style={{ margin: "0 0 8px" }}>Editing <b>{data.interventions.find((x) => x.id === editing)?.name}</b></p>}
-        <div className="ht-row">
-          <div className="ht-field">Name<input value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="Magnesium glycinate" autoFocus /></div>
-          <div className="ht-field">Type<select value={f.type} onChange={(e) => set("type", e.target.value)}>{INT_TYPE.map((s) => <option key={s}>{s}</option>)}</select></div>
-          <div className="ht-field">Dose
-            <div className="dose-fields">
-              <input type="number" inputMode="decimal" min="0" step="any" value={f.doseAmount} onChange={(e) => set("doseAmount", e.target.value)} placeholder="200" />
-              <select value={f.doseUnit} onChange={(e) => set("doseUnit", e.target.value)}><option value="">unit</option>{[...DOSE_UNITS, ...(f.doseUnit && !DOSE_UNITS.includes(f.doseUnit) ? [f.doseUnit] : [])].map((u) => <option key={u} value={u}>{u}</option>)}</select>
-            </div>
-          </div>
-          <div className="ht-field">Dose note<input value={f.doseNote} onChange={(e) => set("doseNote", e.target.value)} placeholder="evening, with food" /></div>
-          <div className="ht-field">Recommended by<input value={f.source} onChange={(e) => set("source", e.target.value)} placeholder="Practitioner, book, self" /></div>
-        </div>
-        <div className="ht-row">
-          <div className="ht-field">Start<input type="date" value={f.start} onChange={(e) => set("start", e.target.value)} /></div>
-          <div className="ht-field">End<input type="date" value={f.end} onChange={(e) => set("end", e.target.value)} /></div>
-          <div className="ht-field">Status<select value={f.status} onChange={(e) => set("status", e.target.value)}>{INT_STATUS.map((s) => <option key={s}>{s}</option>)}</select></div>
-        </div>
-        <p className="hint" style={{ margin: "-6px 0 10px" }}>Baseline: already taking, not changing. Testing: the one thing you're evaluating now. The switch turns it on or off without losing its history — off sets the end date to yesterday so today's checklist drops it.</p>
-        {doseChange ? (
-          <div className="ht-status" style={{ marginBottom: 10 }}>
-            <span>Dose changed from <b>{doseChange.from}</b> to <b>{doseChange.to}</b>. A dose change is a change — start a test window for it, or just update the number?</span>
-          </div>
-        ) : null}
-        {doseChange ? (
-          <div className="day-actions" style={{ marginBottom: 10 }}>
-            <button className="btn sm" onClick={startDoseTest}>Start a test</button>
-            <button className="btn ghost sm" onClick={() => applyEdit(doseChange.patch)}>Just update</button>
-            <button className="ht-link" onClick={() => setDoseChange(null)}>Back</button>
-          </div>
-        ) : <button className="btn sm" onClick={submit} style={{ marginBottom: 10 }}>{editing ? "Save changes" : "Save"}</button>}
-      </div>}
-      {sorted.length === 0 ? <p className="empty">Add everything you currently take as <i>baseline</i> first, so the trends chart has context.</p> : narrow ? (
-        <div className="llist">
-          {sorted.map((x) => (
-            <CompactRow key={x.id} off={!isOn(x)} lead={onSwitch(x)} name={x.name} pill={statusSelect(x)}
-              sub={[x.type, doseLabel(x), x.start ? `from ${x.start}` : null, x.end ? `to ${x.end}` : null].filter(Boolean).join(" · ")}
-              kv={[["Type", x.type], ["Dose", doseLabel(x) || "—"], ["Start", x.start || "—"], ["End", endInput(x)], ["From", x.source || "—"], ["Outcome", outcomeInput(x)]]}
-              actions={actions(x)} />
-          ))}
-        </div>
-      ) : (
-        <div className="tscroll"><table className="t"><thead><tr><th>On</th><th>Name</th><th>Type</th><th>Dose</th><th>Start</th><th>End</th><th>From</th><th>Status</th><th>Outcome</th><th></th></tr></thead>
-          <tbody>{sorted.map((x) => (
-            <tr key={x.id} className={isOn(x) ? "" : "off"}>
-              <td>{onSwitch(x)}</td>
-              <td>{x.name}</td><td style={{ color: "var(--mute)" }}>{x.type}</td><td>{doseLabel(x) || "—"}</td><td>{x.start || "—"}</td>
-              <td>{endInput(x)}</td>
-              <td style={{ color: "var(--mute)" }}>{x.source || "—"}</td>
-              <td>{statusSelect(x)}</td>
-              <td>{outcomeInput(x)}</td>
               <td style={{ whiteSpace: "nowrap" }}>{actions(x)}</td>
             </tr>
           ))}</tbody></table></div>

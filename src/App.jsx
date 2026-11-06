@@ -163,8 +163,7 @@ function HealthTracker({ session }) {
         </div>
         <span className="ht-spacer" />
         <div className="ht-actions">
-          {msg && !syncing ? <span className="hint desk-only">{msg}</span>
-               : storageOk !== null && <button className="ht-link desk-only" onClick={() => refresh()} title="Sync now" style={storageOk === false ? { color: "var(--bad)" } : undefined}>{statusText}</button>}
+          {storageOk !== null && <button className="ht-link desk-only" onClick={() => refresh()} title="Sync now" style={storageOk === false ? { color: "var(--bad)" } : undefined}>{statusText}</button>}
           {storageOk !== null && <button className={"status-icon mob-only" + (storageOk === false ? " bad" : "") + (syncing ? " syncing" : "")} onClick={() => refresh()} title={syncing ? "Syncing…" : "Tap to sync"} aria-label="Sync now"><StatusIcon /></button>}
           <input ref={importRef} type="file" accept=".json" style={{ display: "none" }} onChange={(e) => { if (e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ""; }} />
           <button className="ht-link desk-only" onClick={() => setDataModal(true)}>Import</button>
@@ -184,7 +183,9 @@ function HealthTracker({ session }) {
           )}
         </div>
       </header>
-      {msg && <p className="ht-msg mob-only">{msg}</p>}
+      {/* Messages float over the page instead of being inserted into it, so
+          saving never pushes the content down and back up. */}
+      <div className={"toast" + (msg ? " show" : "")} role="status" aria-live="polite">{msg}</div>
       <main className="ht-main">
         <div className={"ht-status" + (openWindow ? "" : " clear")}>
           {openWindow ? <Flask /> : <span className="dot" />}

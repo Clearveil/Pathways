@@ -251,3 +251,32 @@ alter table public.entries
 -- ---------------------------------------------------------------------------
 alter table public.entries
   add column clarity smallint check (clarity between 1 and 10);
+
+-- ---------------------------------------------------------------------------
+-- Migration `routine_drinks_stress` (2026-11-06).
+-- ---------------------------------------------------------------------------
+-- Daily stress rating, 1 (calm) to 10 (overwhelmed).
+-- Drinks as their own daily list: [{id, name, size, qty}].
+-- Status of routine activities per day: { intervention_id: done | modified | skipped }.
+alter table public.entries
+  add column stress smallint check (stress between 1 and 10),
+  add column drinks jsonb not null default '[]',
+  add column activity_status jsonb not null default '{}';
+
+-- Routine scheduling on everything in the Index.
+--   doses_per_day: 1 = all at once; 2+ = split, each portion = dose_amount / doses_per_day.
+--   days:          weekdays it's scheduled, 0 = Sunday .. 6 = Saturday; null = every day.
+--   times:         optional local times 'HH:MM', one per portion.
+alter table public.interventions
+  add column doses_per_day smallint not null default 1 check (doses_per_day between 1 and 12),
+  add column days smallint[] check (days is null or days <@ array[0,1,2,3,4,5,6]::smallint[]),
+  add column times text[];
+
+-- Kinds: supplement | medication | treatment | activity. Old values stay
+-- allowed so an app still open on an older build can't fail a save.
+alter table public.interventions drop constraint interventions_type_check;
+alter table public.interventions add constraint interventions_type_check
+  check (type in ('supplement','medication','treatment','activity','western','naturopathic','lifestyle'));
+update public.interventions set type = case type
+  when 'western' then 'medication' when 'naturopathic' then 'treatment' when 'lifestyle' then 'activity' else type end
+where type in ('western','naturopathic','lifestyle');
