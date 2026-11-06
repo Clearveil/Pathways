@@ -3,11 +3,13 @@
 // that reads it breaks. Per day, entries.doses records the amount actually
 // taken, which is what makes "I tried 400 instead of 200" a real data point.
 
+export const TIME_UNITS = ["min", "hr"];
 export const DOSE_UNITS = ["mg", "mcg", "g", "IU", "ml", "drops", "capsule", "tablet", "pill", "scoop", "serving"];
 const COUNT_UNITS = ["capsule", "tablet", "pill", "scoop", "serving"];
 const ALIASES = {
   "µg": "mcg", ug: "mcg", iu: "IU", cap: "capsule", caps: "capsule", capsules: "capsule",
   tab: "tablet", tabs: "tablet", tablets: "tablet", pills: "pill", pill: "pill", drop: "drops", scoops: "scoop", servings: "serving",
+  min: "min", mins: "min", minute: "min", minutes: "min", hr: "hr", hrs: "hr", hour: "hr", hours: "hr",
   gram: "g", grams: "g", milligram: "mg", milligrams: "mg", microgram: "mcg", micrograms: "mcg",
 };
 
@@ -39,6 +41,8 @@ export function doseLabel(i) {
 // A sensible +/- increment: whole units for things you count, otherwise
 // about a quarter of the planned amount snapped to a round number.
 export function doseStep(amount, unit) {
+  if (unit === "min") return 5;
+  if (unit === "hr") return 0.25;
   if (unit === "tablet") return 0.5;
   if (COUNT_UNITS.includes(unit) || unit === "drops") return 1;
   if (!amount || amount <= 0) return 1;

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { today, addDays, uid, FOOD_STATUS, CONFIDENCE, INT_TYPE, INT_STATUS, KIND_LABEL, DAY_SHORT, isOn, isActivity, scheduleLabel } from "../lib/utils.js";
 import { useNarrow } from "../lib/useNarrow.js";
-import { DOSE_UNITS, doseLabel, partsOf } from "../lib/dose.js";
+import { DOSE_UNITS, TIME_UNITS, doseLabel, partsOf } from "../lib/dose.js";
 
 // The Index is where everything is defined once: what it is, how much, how
 // it's taken, and when. The switch puts it on the routine; the Day view then
@@ -62,7 +62,7 @@ function DayPicker({ days, onChange }) {
 
 function Interventions({ kind, data, save, openWindow }) {
   const act = kind === "activity";
-  const blank = { name: "", type: kind, doseAmount: "", doseUnit: act ? "" : "mg", doseNote: "", dosesPerDay: 1, days: null, times: [], start: today(), end: "", source: "", status: "baseline" };
+  const blank = { name: "", type: kind, measure: kind === "treatment" ? "time" : "dose", doseAmount: "", doseUnit: act ? "" : kind === "treatment" ? "min" : "mg", doseNote: "", dosesPerDay: 1, days: null, times: [], start: today(), end: "", source: "", status: "baseline" };
   const narrow = useNarrow();
   const [f, setF] = useState(blank);
   const [warn, setWarn] = useState("");
@@ -73,7 +73,7 @@ function Interventions({ kind, data, save, openWindow }) {
   const block = () => setWarn(`${openWindow.name} is already being tested. One open test at a time — otherwise you won't know which change did what.`);
   const closeForm = () => { setF(blank); setEditing(null); setAdding(false); setDoseChange(null); };
   const startEdit = (x) => {
-    setF({ name: x.name, type: isActivity(x) ? "activity" : x.type, doseAmount: x.doseAmount ?? "", doseUnit: x.doseUnit || "", doseNote: x.doseNote || "", dosesPerDay: x.dosesPerDay || 1, days: x.days || null, times: x.times || [], start: x.start || "", end: x.end || "", source: x.source || "", status: x.status });
+    setF({ name: x.name, type: isActivity(x) ? "activity" : x.type, measure: TIME_UNITS.includes(x.doseUnit) ? "time" : "dose", doseAmount: x.doseAmount ?? "", doseUnit: x.doseUnit || "", doseNote: x.doseNote || "", dosesPerDay: x.dosesPerDay || 1, days: x.days || null, times: x.times || [], start: x.start || "", end: x.end || "", source: x.source || "", status: x.status });
     setEditing(x.id); setAdding(true); setWarn(""); setDoseChange(null);
   };
   const applyEdit = (patch) => { save({ ...data, interventions: data.interventions.map((x) => x.id === editing ? { ...x, ...patch } : x) }); closeForm(); };
@@ -82,7 +82,9 @@ function Interventions({ kind, data, save, openWindow }) {
     const cur = editing ? data.interventions.find((x) => x.id === editing) : null;
     if (f.status === "testing" && openWindow && cur?.status !== "testing") return block();
     setWarn("");
-    const patch = { ...f, doseAmount: f.doseAmount === "" ? null : Number(f.doseAmount), times: (f.times || []).slice(0, f.type === "activity" ? 1 : f.dosesPerDay) };
+    const { measure, ...rest } = f;
+    const timed = f.type === "treatment" && measure === "time";
+    const patch = { ...rest, doseAmount: f.doseAmount === "" ? null : Number(f.doseAmount), dosesPerDay: timed ? 1 : f.dosesPerDay, times: (f.times || []).slice(0, f.type === "activity" || timed ? 1 : f.dosesPerDay) };
     patch.dose = doseLabel(patch);
     if (!editing) { save({ ...data, interventions: [...data.interventions, { ...patch, outcome: "", id: uid() }] }); closeForm(); return; }
     // A dose change is a change. Offer to make it a test window rather than
@@ -110,14 +112,16 @@ function Interventions({ kind, data, save, openWindow }) {
     else update(x.id, { end: "", start: x.start || today(), status: x.status === "discontinued" ? "baseline" : x.status });
   };
   const onCount = mine.filter(isOn).length;
-  const amountText = (x) => act ? (x.doseNote || "—") : (doseLabel(x) ? `${doseLabel(x)}${partsOf(x) > 1 ? ` · in ${partsOf(x)} doses` : ""}` : "—");
+  const amountText = (x) => act ? (x.doseNote || "—") : TIME_UNITS.includes(x.doseUnit) ? (doseLabel(x) || "—") : (doseLabel(x) ? `${doseLabel(x)}${partsOf(x) > 1 ? ` · in ${partsOf(x)} doses` : ""}` : "—");
   const onSwitch = (x) => <button className={"switch" + (isOn(x) ? " on" : "")} onClick={() => toggleOn(x)} title={isOn(x) ? "On the routine — switch off" : "Off the routine — switch on"} />;
   const statusSelect = (x) => <select value={x.status} onChange={(e) => update(x.id, { status: e.target.value })} className={`pill ${x.status}`}>{INT_STATUS.map((s) => <option key={s}>{s}</option>)}</select>;
   const endInput = (x) => <input type="date" value={x.end || ""} onChange={(e) => update(x.id, { end: e.target.value })} style={{ width: 118 }} />;
   const outcomeInput = (x) => <input value={x.outcome || ""} onChange={(e) => update(x.id, { outcome: e.target.value })} placeholder="What happened" style={{ width: 130 }} />;
   const actions = (x) => <><button className="ht-link" onClick={() => startEdit(x)}>Edit</button><button className="ht-link" onClick={() => remove(x.id)}>Remove</button></>;
   const formAct = f.type === "activity";
-  const timeSlots = formAct ? 1 : Math.max(1, f.dosesPerDay || 1);
+  const formTimed = f.type === "treatment" && f.measure === "time";
+  const timeSlots = formAct || formTimed ? 1 : Math.max(1, f.dosesPerDay || 1);
+  const setMeasure = (m) => setF((p) => ({ ...p, measure: m, doseUnit: m === "time" ? "min" : "mg", dosesPerDay: m === "time" ? 1 : p.dosesPerDay }));
 
   return (
     <div className="card">
@@ -134,18 +138,24 @@ function Interventions({ kind, data, save, openWindow }) {
           {formAct ? (
             <div className="ht-field" style={{ flex: 2 }}>Details<input value={f.doseNote} onChange={(e) => set("doseNote", e.target.value)} placeholder="30 min, easy pace" /></div>
           ) : <>
-            <div className="ht-field">Dose
+            {f.type === "treatment" && <div className="ht-field">Measured by
+              <select value={f.measure} onChange={(e) => setMeasure(e.target.value)}>
+                <option value="time">Length of time</option>
+                <option value="dose">Dose</option>
+              </select>
+            </div>}
+            <div className="ht-field">{formTimed ? "Length" : "Dose"}
               <div className="dose-fields">
-                <input type="number" inputMode="decimal" min="0" step="any" value={f.doseAmount} onChange={(e) => set("doseAmount", e.target.value)} placeholder="200" />
-                <select value={f.doseUnit} onChange={(e) => set("doseUnit", e.target.value)}><option value="">unit</option>{[...DOSE_UNITS, ...(f.doseUnit && !DOSE_UNITS.includes(f.doseUnit) ? [f.doseUnit] : [])].map((u) => <option key={u} value={u}>{u}</option>)}</select>
+                <input type="number" inputMode="decimal" min="0" step="any" value={f.doseAmount} onChange={(e) => set("doseAmount", e.target.value)} placeholder={formTimed ? "20" : "200"} />
+                <select value={f.doseUnit} onChange={(e) => set("doseUnit", e.target.value)}>{formTimed ? TIME_UNITS.map((u) => <option key={u} value={u}>{u === "min" ? "minutes" : "hours"}</option>) : <><option value="">unit</option>{[...DOSE_UNITS, ...(f.doseUnit && !DOSE_UNITS.includes(f.doseUnit) && !TIME_UNITS.includes(f.doseUnit) ? [f.doseUnit] : [])].map((u) => <option key={u} value={u}>{u}</option>)}</>}</select>
               </div>
             </div>
-            <div className="ht-field">How it's taken
+            {!formTimed && <div className="ht-field">How it's taken
               <select value={f.dosesPerDay} onChange={(e) => set("dosesPerDay", Number(e.target.value))}>
                 <option value={1}>All at once</option>
                 {[2, 3, 4].map((n) => <option key={n} value={n}>Split into {n} doses</option>)}
               </select>
-            </div>
+            </div>}
           </>}
         </div>
         <div className="ht-row">
@@ -159,7 +169,7 @@ function Interventions({ kind, data, save, openWindow }) {
           </div>
         </div>
         <div className="ht-row">
-          {!formAct && <div className="ht-field">Dose note<input value={f.doseNote} onChange={(e) => set("doseNote", e.target.value)} placeholder="with food" /></div>}
+          {!formAct && <div className="ht-field">{formTimed ? "Note" : "Dose note"}<input value={f.doseNote} onChange={(e) => set("doseNote", e.target.value)} placeholder={formTimed ? "140°F, evening" : "with food"} /></div>}
           <div className="ht-field">Recommended by<input value={f.source} onChange={(e) => set("source", e.target.value)} placeholder="Practitioner, book, self" /></div>
         </div>
         <div className="ht-row">
@@ -167,7 +177,7 @@ function Interventions({ kind, data, save, openWindow }) {
           <div className="ht-field">End<input type="date" value={f.end} onChange={(e) => set("end", e.target.value)} /></div>
           <div className="ht-field">Status<select value={f.status} onChange={(e) => set("status", e.target.value)}>{INT_STATUS.map((s) => <option key={s}>{s}</option>)}</select></div>
         </div>
-        <p className="hint" style={{ margin: "-6px 0 10px" }}>Baseline: already doing it, not changing. Testing: the one thing you're evaluating now. The switch puts it on or off the routine without losing its history. {!formAct && "Split doses are checked off one portion at a time in the Day view."}</p>
+        <p className="hint" style={{ margin: "-6px 0 10px" }}>Baseline: already doing it, not changing. Testing: the one thing you're evaluating now. The switch puts it on or off the routine without losing its history. {!formAct && !formTimed && "Split doses are checked off one portion at a time in the Day view."}</p>
         {doseChange ? (
           <div className="ht-status" style={{ marginBottom: 10 }}>
             <span>Dose changed from <b>{doseChange.from}</b> to <b>{doseChange.to}</b>. A dose change is a change — start a test window for it, or just update the number?</span>

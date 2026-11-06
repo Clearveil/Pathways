@@ -2,7 +2,7 @@
 // when that is true and "no clear difference" when that is the result.
 // Never inflate a weak signal into a recommendation.
 
-import { today, addDays, now, mealsOn, workoutsOn, logged, adherence, isActivity, scheduledOn } from "./utils.js";
+import { today, addDays, now, mealsOn, workoutsOn, logged, adherence, isActivity, usesStatus, scheduledOn } from "./utils.js";
 
 export function buildInsights(data) {
   const out = [];
@@ -154,7 +154,7 @@ export function buildInsights(data) {
 
     // per-supplement missed vs taken
     const byDate = Object.fromEntries(E.map((e) => [e.date, e]));
-    data.interventions.filter((i) => !isActivity(i)).forEach((i) => {
+    data.interventions.filter((i) => !usesStatus(i)).forEach((i) => {
       const days = E.filter((e) => i.start && i.start <= e.date && (!i.end || i.end >= e.date) && scheduledOn(i, e.date));
       const took = days.filter((e) => e.taken?.includes(i.id)), skip = days.filter((e) => !e.taken?.includes(i.id));
       if (took.length < 4 || skip.length < 3) return;
@@ -167,14 +167,16 @@ export function buildInsights(data) {
     });
   }
 
-  // Routine activities: done vs skipped. Skipping is data, not failure —
-  // the question is only whether doing it changes how you feel.
-  data.interventions.filter(isActivity).forEach((i) => {
+  // Activities and treatments: done vs skipped. Skipping is data, not
+  // failure — the question is only whether doing it changes how you feel.
+  // Days left blank are excluded: no answer isn't the same as a skip.
+  data.interventions.filter(usesStatus).forEach((i) => {
     const days = E.filter((e) => i.start && i.start <= e.date && (!i.end || i.end >= e.date) && scheduledOn(i, e.date) && (e.activityStatus || {})[i.id]);
     if (days.length < 7) return;
     const st = (e) => e.activityStatus[i.id];
     const did = days.filter((e) => st(e) === "done" || st(e) === "modified"), skip = days.filter((e) => st(e) === "skipped");
-    let body = `Done ${days.filter((e) => st(e) === "done").length}, modified ${days.filter((e) => st(e) === "modified").length}, skipped ${skip.length} of ${days.length} scheduled days.`;
+    const blank = E.filter((e) => i.start && i.start <= e.date && (!i.end || i.end >= e.date) && scheduledOn(i, e.date) && !(e.activityStatus || {})[i.id]).length;
+    let body = `Done ${did.length}, skipped ${skip.length} of ${days.length} answered days${blank ? ` (${blank} scheduled day${blank === 1 ? "" : "s"} left blank — not counted either way)` : ""}.`;
     let tone = "flat";
     if (did.length >= 4 && skip.length >= 3) {
       const da = nextDays(did), sa = nextDays(skip);

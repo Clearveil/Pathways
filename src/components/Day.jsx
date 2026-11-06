@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { today, addDays, uid, now, ACTIVITY, INT_TYPE, KIND_LABEL, activeOn, isActivity, mealKey, woKey, logged, fmtLong, fmtTime } from "../lib/utils.js";
 import { Trash } from "./Icons.jsx";
 import Repeat from "./Repeat.jsx";
-import { DOSE_UNITS, doseLabel, doseStep, fmtAmt, partsOf, portionOf, unitFor } from "../lib/dose.js";
+import { DOSE_UNITS, TIME_UNITS, doseLabel, doseStep, fmtAmt, partsOf, portionOf, unitFor } from "../lib/dose.js";
 
 const SINGULAR = { supplement: "supplement", medication: "medication", treatment: "treatment", activity: "activity" };
 
@@ -27,7 +27,7 @@ function Scale({ label, hint, value, onPick, max = 10 }) {
 
 // Three-state marker for anything you do rather than take: planned workouts
 // and routine activities. Skipped is a grey dash, never a red X.
-const NEXT_STATE = { undefined: "done", done: "modified", modified: "skipped", skipped: undefined };
+const NEXT_STATE = { undefined: "done", done: "skipped", modified: "skipped", skipped: undefined };
 function StateBox({ st }) {
   return <span className={"box" + (st === "skipped" ? " skip" : st === "modified" ? " mod" : "")}>{st === "done" ? "✓" : st === "modified" ? "~" : st === "skipped" ? "–" : ""}</span>;
 }
@@ -45,8 +45,10 @@ export default function Day({ data, save, date, setDate }) {
   const [editingDrink, setEditingDrink] = useState(null);
   const [addingWo, setAddingWo] = useState(false);
   const [newWo, setNewWo] = useState({ workout: "", details: "" });
+  const [woMode, setWoMode] = useState(""); // "" | "index" | "new"
+  const [woPick, setWoPick] = useState("");
   const [addingRoutine, setAddingRoutine] = useState(false);
-  const blankRoutine = { pick: "", name: "", kind: "supplement", amount: "", unit: "mg" };
+  const blankRoutine = { mode: "", pick: "", name: "", kind: "supplement", amount: "", unit: "mg" };
   const [newRoutine, setNewRoutine] = useState(blankRoutine);
   useEffect(() => { setConfirmRemove(false); setAddingRoutine(false); }, [date]);
   useEffect(() => { setF(existing || { date, energy: null, inflammation: null, clarity: null, stress: null, flare: false, severity: 3, activity: "", activityNote: "", notes: "", taken: [], doses: {}, meals: [], extras: [], drinks: [], activityStatus: {}, routineExtras: [] }); }, [date, existing]);
@@ -135,25 +137,30 @@ export default function Day({ data, save, date, setDate }) {
     setNewWo({ workout: "", details: "" }); setAddingWo(false);
   };
   const removeWo = (id) => saveEntry({ ...f, date, extraWorkouts: (f.extraWorkouts || []).filter((x) => x.id !== id) });
-  const woRepeat = recent(data.entries, date, (e) => e.extraWorkouts, (x) => `${x.workout.toLowerCase()}|${(x.details || "").toLowerCase()}`)
-    .filter((x) => !(f.extraWorkouts || []).some((y) => y.workout === x.workout && y.details === x.details))
-    .map((x) => ({ key: x.workout + x.details, label: x.workout, detail: x.details || "recent", onPick: () => saveEntry({ ...f, date, extraWorkouts: [...(f.extraWorkouts || []), { id: uid(), workout: x.workout, details: x.details || "" }] }) }));
 
-  // ---- Routine -----------------------------------------------------------
-  // Everything in the Index that's switched on and scheduled for this
-  // weekday. Things you take are checked off with an amount; split doses
-  // start at one portion and + adds the next. Activities are three-state.
+  // ---- Routine and activities -------------------------------------------
+  // Supplements, medications and treatments live in Today's routine;
+  // activities scheduled in the Index live in the Activity card.
+  // Supplements and medications are checked off with an amount.
+  // Treatments and activities are answered done or skipped: a skip is an
+  // explicit answer and is recorded; leaving it blank records nothing, so
+  // insights can tell "chose not to" apart from "didn't log".
   const byTime = (a, b) => ((a.times || []).find(Boolean) || "99").localeCompare((b.times || []).find(Boolean) || "99") || a.name.localeCompare(b.name);
-  const routine = activeOn(data, date).sort(byTime);
-  const onRoutine = new Set(routine.map((i) => i.id));
-  // Index items that aren't scheduled today but were taken or done anyway.
-  const offRoutine = data.interventions.filter((i) => !onRoutine.has(i.id) && (f.taken?.includes(i.id) || (f.activityStatus || {})[i.id])).sort(byTime);
-  const shownItems = [...routine, ...offRoutine];
+  const scheduled = activeOn(data, date).sort(byTime);
+  const onSchedule = new Set(scheduled.map((i) => i.id));
+  const usesState = (i) => isActivity(i) || i.type === "treatment";
+  const stOf = (i) => (f.activityStatus || {})[i.id];
+  // Index items not scheduled today but taken or done anyway.
+  const offSchedule = data.interventions.filter((i) => !onSchedule.has(i.id) && (f.taken?.includes(i.id) || stOf(i))).sort(byTime);
+  const routine = scheduled.filter((i) => !isActivity(i));
+  const routineShown = [...routine, ...offSchedule.filter((i) => !isActivity(i))];
+  const actScheduled = scheduled.filter(isActivity);
+  const actShown = [...actScheduled, ...offSchedule.filter(isActivity)];
   const kindOf = (i) => isActivity(i) ? "activity" : i.type;
-  const groups = INT_TYPE.map((k) => [k, shownItems.filter((i) => kindOf(i) === k)]).filter(([, items]) => items.length);
-  const takeItems = routine.filter((i) => !isActivity(i));
-  const actItems = routine.filter(isActivity);
-  const doneCount = takeItems.filter((i) => f.taken?.includes(i.id)).length + actItems.filter((i) => (f.activityStatus || {})[i.id]).length;
+  const ROUTINE_KINDS = ["supplement", "medication", "treatment"];
+  const groups = ROUTINE_KINDS.map((k) => [k, routineShown.filter((i) => kindOf(i) === k)]).filter(([, items]) => items.length);
+  const answered = (i) => usesState(i) ? !!stOf(i) : !!f.taken?.includes(i.id);
+  const doneCount = routine.filter(answered).length;
   const firstAmount = (i) => partsOf(i) > 1 ? portionOf(i) : i.doseAmount;
   const stepFor = (i) => partsOf(i) > 1 ? portionOf(i) : doseStep(i.doseAmount, i.doseUnit);
   const toggleTaken = (i) => {
@@ -163,33 +170,49 @@ export default function Day({ data, save, date, setDate }) {
     if (on) delete doses[i.id]; else if (i.doseAmount != null) doses[i.id] = firstAmount(i);
     saveEntry({ ...f, taken, doses, date });
   };
+  const setState = (i, state) => {
+    const activityStatus = { ...(f.activityStatus || {}) };
+    const doses = { ...(f.doses || {}) };
+    if (state) activityStatus[i.id] = state; else delete activityStatus[i.id];
+    if (state === "done" && i.doseAmount != null) doses[i.id] = doses[i.id] ?? firstAmount(i);
+    if (state !== "done") delete doses[i.id];
+    saveEntry({ ...f, date, activityStatus, doses });
+  };
+  const cycleState = (i) => setState(i, NEXT_STATE[stOf(i)]);
   const adjustDose = (i, delta) => {
     const doses = { ...(f.doses || {}) };
     const cur = doses[i.id] ?? firstAmount(i) ?? 0;
     const next = Math.max(0, Math.round((cur + delta) * 100) / 100);
-    if (next === 0) return toggleTaken(i);
+    if (next === 0) return usesState(i) ? setState(i, undefined) : toggleTaken(i);
     doses[i.id] = next;
-    saveEntry({ ...f, taken: f.taken?.includes(i.id) ? f.taken : [...(f.taken || []), i.id], doses, date });
+    if (usesState(i)) saveEntry({ ...f, date, doses, activityStatus: { ...(f.activityStatus || {}), [i.id]: "done" } });
+    else saveEntry({ ...f, taken: f.taken?.includes(i.id) ? f.taken : [...(f.taken || []), i.id], doses, date });
   };
-  const cycleActivity = (i) => {
-    const activityStatus = { ...(f.activityStatus || {}) };
-    const nx = NEXT_STATE[activityStatus[i.id]];
-    if (nx) activityStatus[i.id] = nx; else delete activityStatus[i.id];
-    saveEntry({ ...f, date, activityStatus });
+  const addFromIndex = (i) => {
+    if (usesState(i)) { if (stOf(i) !== "done") setState(i, "done"); return; }
+    if (f.taken?.includes(i.id)) return;
+    const doses = { ...(f.doses || {}) };
+    if (i.doseAmount != null) doses[i.id] = firstAmount(i);
+    saveEntry({ ...f, date, taken: [...(f.taken || []), i.id], doses });
   };
   const testingFoods = data.foods.filter((x) => x.status === "testing");
+  const notToday = data.interventions.filter((i) => i.status !== "discontinued" && !onSchedule.has(i.id) && !offSchedule.some((o) => o.id === i.id));
+  const notTodayRoutine = notToday.filter((i) => !isActivity(i));
+  const notTodayActs = notToday.filter(isActivity);
 
-  // Adding to today's routine on the spot: either something from the Index
-  // that isn't scheduled today, or a one-off that isn't in the Index at all
-  // (stored in routineExtras so it still counts in insights).
-  const addFromIndex = (i) => {
-    if (isActivity(i)) saveEntry({ ...f, date, activityStatus: { ...(f.activityStatus || {}), [i.id]: "done" } });
-    else if (!f.taken?.includes(i.id)) {
-      const doses = { ...(f.doses || {}) };
-      if (i.doseAmount != null) doses[i.id] = firstAmount(i);
-      saveEntry({ ...f, date, taken: [...(f.taken || []), i.id], doses });
-    }
-  };
+  // Activity card: + Add picks an Index activity not scheduled today, or
+  // logs a one-off. Repeat offers both, activities only.
+  const pickWo = () => { const i = data.interventions.find((x) => x.id === woPick); if (i) addFromIndex(i); closeWo(); };
+  const closeWo = () => { setAddingWo(false); setWoMode(""); setWoPick(""); setNewWo({ workout: "", details: "" }); };
+  const woRepeat = [
+    ...notTodayActs.map((i) => ({ key: "i" + i.id, label: i.name, detail: `${i.doseNote ? i.doseNote + " · " : ""}not scheduled today`, onPick: () => addFromIndex(i) })),
+    ...recent(data.entries, date, (e) => e.extraWorkouts, (x) => `${x.workout.toLowerCase()}|${(x.details || "").toLowerCase()}`)
+      .filter((x) => !(f.extraWorkouts || []).some((y) => y.workout === x.workout && y.details === x.details))
+      .map((x) => ({ key: "r" + x.workout + x.details, label: x.workout, detail: x.details || "recent", onPick: () => saveEntry({ ...f, date, extraWorkouts: [...(f.extraWorkouts || []), { id: uid(), workout: x.workout, details: x.details || "" }] }) })),
+  ];
+
+  // Routine card: + Add starts with a choice — from the Index, or something
+  // that isn't in it — so the list of options doesn't land all at once.
   const putRoutineExtra = (x) => {
     const list = f.routineExtras || [];
     const hit = list.find((y) => y.name.toLowerCase() === x.name.toLowerCase() && y.kind === x.kind);
@@ -197,32 +220,40 @@ export default function Day({ data, save, date, setDate }) {
   };
   const submitRoutine = () => {
     const n = newRoutine;
-    if (n.pick && n.pick !== "new") { const i = data.interventions.find((x) => x.id === n.pick); if (i) addFromIndex(i); }
-    else if (n.name.trim()) { const noAmt = n.kind === "activity" || n.amount === ""; putRoutineExtra({ name: n.name.trim(), kind: n.kind, amount: noAmt ? null : Number(n.amount), unit: noAmt ? "" : n.unit }); }
+    if (n.mode === "index") { const i = data.interventions.find((x) => x.id === n.pick); if (!i) return; addFromIndex(i); }
+    else if (n.mode === "new" && n.name.trim()) { const noAmt = n.amount === ""; putRoutineExtra({ name: n.name.trim(), kind: n.kind, amount: noAmt ? null : Number(n.amount), unit: noAmt ? "" : n.unit }); }
     else return;
     setNewRoutine(blankRoutine); setAddingRoutine(false);
   };
   const bumpRoutineExtra = (id, delta) => saveEntry({ ...f, date, routineExtras: (f.routineExtras || []).map((x) => x.id === id ? { ...x, qty: Math.max(1, (x.qty || 1) + delta) } : x) });
   const removeRoutineExtra = (id) => saveEntry({ ...f, date, routineExtras: (f.routineExtras || []).filter((x) => x.id !== id) });
-  const notToday = data.interventions.filter((i) => i.status !== "discontinued" && !onRoutine.has(i.id) && !offRoutine.some((o) => o.id === i.id));
   const routineRepeat = [
-    ...notToday.map((i) => ({ key: "i" + i.id, label: i.name, detail: `${SINGULAR[kindOf(i)]}${doseLabel(i) ? " · " + doseLabel(i) : ""} · not scheduled today`, onPick: () => addFromIndex(i) })),
-    ...recent(data.entries, date, (e) => e.routineExtras, (x) => `${x.name.toLowerCase()}|${x.kind}`)
+    ...notTodayRoutine.map((i) => ({ key: "i" + i.id, label: i.name, detail: `${SINGULAR[kindOf(i)]}${doseLabel(i) ? " · " + doseLabel(i) : ""} · not scheduled today`, onPick: () => addFromIndex(i) })),
+    ...recent(data.entries, date, (e) => (e.routineExtras || []).filter((x) => x.kind !== "activity"), (x) => `${x.name.toLowerCase()}|${x.kind}`)
       .filter((x) => !(f.routineExtras || []).some((y) => y.name.toLowerCase() === x.name.toLowerCase()))
       .map((x) => ({ key: "x" + x.name + x.kind, label: x.name, detail: `${SINGULAR[x.kind] || x.kind}${x.amount != null ? ` · ${fmtAmt(x.amount)} ${unitFor(x.amount, x.unit)}` : ""} · one-off`, onPick: () => putRoutineExtra(x) })),
   ];
 
+  const Stepper = ({ i, amt, changed }) => (
+    <span className="dose-ctl" onClick={(e) => e.stopPropagation()}>
+      <button type="button" onClick={() => adjustDose(i, -stepFor(i))} aria-label="Less">−</button>
+      <span className={"amt" + (changed ? " changed" : "")}>{fmtAmt(amt)} {unitFor(amt, i.doseUnit)}</span>
+      <button type="button" onClick={() => adjustDose(i, stepFor(i))} aria-label="More">+</button>
+    </span>
+  );
+  const Dots = ({ i, amt }) => {
+    const parts = partsOf(i), portion = portionOf(i);
+    if (parts < 2 || !portion) return null;
+    const n = Math.min(parts, Math.round(amt / portion));
+    return <span className="dose-dots" title={`${n} of ${parts} doses`} aria-label={`${n} of ${parts} doses`}>{Array.from({ length: parts }, (_, k) => <span key={k} className={k < n ? "on" : ""} />)}</span>;
+  };
   const renderTake = (i) => {
     const on = f.taken?.includes(i.id);
     const parts = partsOf(i);
     const planned = i.doseAmount;
     const amt = (f.doses || {})[i.id] ?? (on ? firstAmount(i) : null);
-    const portion = portionOf(i);
-    // Portions taken so far, shown as dots beside the stepper (●○ = 1 of 2).
-    const taken = parts > 1 && portion ? Math.min(parts, Math.round(amt / portion)) : 0;
     const changed = on && planned != null && amt != null && (parts > 1 ? amt > planned + 1e-9 : amt !== planned);
     const label = doseLabel(i);
-    const extra = !onRoutine.has(i.id);
     return (
       <li key={i.id} className={on ? "on" : ""} onClick={() => toggleTaken(i)}>
         <span className="box">{on ? "✓" : ""}</span>
@@ -231,31 +262,35 @@ export default function Day({ data, save, date, setDate }) {
           {!(on && planned != null) && label ? <span className="muted"> · {label}{parts > 1 ? ` in ${parts} doses` : ""}</span> : null}
           {changed && parts === 1 ? <span className="muted"> · planned {fmtAmt(planned)}</span> : null}
           <TimeChip i={i} />
-          {extra && <span className="time-chip">extra</span>}
+          {!onSchedule.has(i.id) && <span className="time-chip">extra</span>}
         </span>
-        {on && planned != null && parts > 1 && (
-          <span className="dose-dots" title={`${taken} of ${parts} doses`} aria-label={`${taken} of ${parts} doses`}>
-            {Array.from({ length: parts }, (_, n) => <span key={n} className={n < taken ? "on" : ""} />)}
-          </span>
-        )}
-        {on && planned != null && (
-          <span className="dose-ctl" onClick={(e) => e.stopPropagation()}>
-            <button type="button" onClick={() => adjustDose(i, -stepFor(i))} aria-label="Less">−</button>
-            <span className={"amt" + (changed ? " changed" : "")}>{fmtAmt(amt)} {unitFor(amt, i.doseUnit)}</span>
-            <button type="button" onClick={() => adjustDose(i, stepFor(i))} aria-label="More">+</button>
-          </span>
-        )}
+        {on && planned != null && <Dots i={i} amt={amt} />}
+        {on && planned != null && <Stepper i={i} amt={amt} changed={changed} />}
         {i.status === "testing" && <span className="pill testing">testing</span>}
       </li>
     );
   };
-  const renderActivity = (i) => {
-    const st = (f.activityStatus || {})[i.id];
+  // Treatments and activities: tap once for done, again for skipped, again to clear.
+  const renderState = (i) => {
+    const st = stOf(i);
+    const done = st === "done" || st === "modified";
+    const planned = i.doseAmount;
+    const amt = (f.doses || {})[i.id] ?? (done ? firstAmount(i) : null);
+    const detail = isActivity(i) ? i.doseNote : doseLabel(i);
+    const changed = done && planned != null && amt != null && amt !== planned && partsOf(i) === 1;
     return (
-      <li key={i.id} className={st === "done" ? "on" : ""} onClick={() => cycleActivity(i)} title="Tap to cycle: done, modified, skipped">
+      <li key={i.id} className={done ? "on" : ""} onClick={() => cycleState(i)} title="Tap: done. Tap again: skipped. Again: clear.">
         <StateBox st={st} />
-        <span className="rname">{i.name}{i.doseNote ? <span className="muted"> · {i.doseNote}</span> : null}<TimeChip i={i} />{!onRoutine.has(i.id) && <span className="time-chip">extra</span>}</span>
-        {st && st !== "done" && <span className={"pill " + (st === "skipped" ? "baseline" : "testing")}>{st}</span>}
+        <span className="rname">
+          {i.name}
+          {detail && !(done && planned != null) ? <span className="muted"> · {detail}</span> : null}
+          {changed ? <span className="muted"> · planned {fmtAmt(planned)}</span> : null}
+          <TimeChip i={i} />
+          {!onSchedule.has(i.id) && <span className="time-chip">extra</span>}
+        </span>
+        {st === "skipped" && <span className="pill baseline">skipped</span>}
+        {done && planned != null && <Dots i={i} amt={amt} />}
+        {done && planned != null && <Stepper i={i} amt={amt} changed={changed} />}
         {i.status === "testing" && <span className="pill testing">testing</span>}
       </li>
     );
@@ -365,33 +400,49 @@ export default function Day({ data, save, date, setDate }) {
           <div className="card">
             <div className="card-head">
               <h3>Activity</h3>
-              {plannedWo.length > 0 && <span className="hint">{plannedWo.filter((w) => (f.woStatus || {})[woKey(w)]).length} of {plannedWo.length} answered</span>}
+              {(actScheduled.length + plannedWo.length) > 0 && <span className="hint">{actScheduled.filter(answered).length + plannedWo.filter((w) => (f.woStatus || {})[woKey(w)]).length} of {actScheduled.length + plannedWo.length}</span>}
               {!addingWo && <Repeat items={woRepeat} />}
-              <button className="btn ghost sm" onClick={() => setAddingWo(!addingWo)}>{addingWo ? "Cancel" : "+ Add"}</button>
+              <button className="btn ghost sm" onClick={() => addingWo ? closeWo() : (setAddingWo(true), setWoMode(notTodayActs.length ? "" : "new"))}>{addingWo ? "Cancel" : "+ Add"}</button>
             </div>
+            {actShown.length > 0 && <ul className="check" style={{ marginTop: 8 }}>{actShown.map(renderState)}</ul>}
             {plannedWo.length > 0 && <ul className="check" style={{ marginTop: 8 }}>
               {plannedWo.map((w, i) => { const k = woKey(w); const st = (f.woStatus || {})[k]; return (
-                <li key={i} className={st === "done" ? "on" : ""} onClick={() => cycleWo(k)} title="Tap to cycle: done, modified, skipped">
+                <li key={i} className={st === "done" || st === "modified" ? "on" : ""} onClick={() => cycleWo(k)} title="Tap: done. Tap again: skipped. Again: clear.">
                   <StateBox st={st} />
-                  <span style={{ flex: 1 }}>{w.workout}{w.details ? <span className="muted"> · {w.details}</span> : null}</span>
-                  {st && st !== "done" && <span className={"pill " + (st === "skipped" ? "baseline" : "testing")}>{st}</span>}
+                  <span style={{ flex: 1 }}>{w.workout}{w.details ? <span className="muted"> · {w.details}</span> : null}<span className="time-chip">plan</span></span>
+                  {st === "skipped" && <span className="pill baseline">skipped</span>}
                 </li>); })}
             </ul>}
             {(f.extraWorkouts || []).length > 0 && <ul className="list" style={{ marginTop: 8 }}>
               {f.extraWorkouts.map((x) => <li key={x.id}>
                 <span style={{ flex: 1 }}>{x.workout}{x.details ? <span className="muted"> · {x.details}</span> : null}</span>
-                <span className="muted" style={{ fontSize: 12 }}>{plannedWo.length ? "off plan" : ""}</span>
+                <span className="muted" style={{ fontSize: 12 }}>one-off</span>
                 <button className="ht-link" style={{ padding: "0 4px", fontSize: 13, lineHeight: 1 }} onClick={() => removeWo(x.id)} title="Remove">×</button>
               </li>)}
             </ul>}
             {addingWo && <div className="inline-add">
-              <div className="ht-row">
-                <div className="ht-field" style={{ flex: 2 }}>What you did<input value={newWo.workout} onChange={(e) => setNewWo({ ...newWo, workout: e.target.value })} placeholder="Walk, lifting, job site" autoFocus onKeyDown={(e) => e.key === "Enter" && addWo()} /></div>
-                <div className="ht-field">Details<input value={newWo.details} onChange={(e) => setNewWo({ ...newWo, details: e.target.value })} placeholder="25 min, easy" onKeyDown={(e) => e.key === "Enter" && addWo()} /></div>
-              </div>
-              <button className="btn sm" onClick={addWo} style={{ marginBottom: 10 }}>Log it</button>
+              {woMode === "" && <div className="choice">
+                <button type="button" className="btn ghost sm" onClick={() => setWoMode("index")}>From your Index</button>
+                <button type="button" className="btn ghost sm" onClick={() => setWoMode("new")}>Something new</button>
+              </div>}
+              {woMode === "index" && <>
+                <div className="ht-field">Activity
+                  <select value={woPick} onChange={(e) => setWoPick(e.target.value)} autoFocus>
+                    <option value="">Choose…</option>
+                    {notTodayActs.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+                  </select>
+                </div>
+                <button className="btn sm" onClick={pickWo} disabled={!woPick} style={{ marginBottom: 10 }}>Add to today</button>
+              </>}
+              {woMode === "new" && <>
+                <div className="ht-row">
+                  <div className="ht-field" style={{ flex: 2 }}>What you did<input value={newWo.workout} onChange={(e) => setNewWo({ ...newWo, workout: e.target.value })} placeholder="Walk, lifting, job site" autoFocus onKeyDown={(e) => e.key === "Enter" && (addWo(), closeWo())} /></div>
+                  <div className="ht-field">Details<input value={newWo.details} onChange={(e) => setNewWo({ ...newWo, details: e.target.value })} placeholder="25 min, easy" onKeyDown={(e) => e.key === "Enter" && (addWo(), closeWo())} /></div>
+                </div>
+                <button className="btn sm" onClick={() => { addWo(); closeWo(); }} disabled={!newWo.workout.trim()} style={{ marginBottom: 10 }}>Log it</button>
+              </>}
             </div>}
-            <div className="ht-row" style={{ marginTop: plannedWo.length || (f.extraWorkouts || []).length || addingWo ? 12 : 8 }}>
+            <div className="ht-row" style={{ marginTop: 12 }}>
               <div className="ht-field" style={{ marginBottom: 4 }}>How hard overall
                 <select value={f.activity} onChange={(e) => set("activity", e.target.value)}><option value="">Not set</option>{ACTIVITY.map((a) => <option key={a} value={a}>{a}</option>)}</select>
               </div>
@@ -399,7 +450,7 @@ export default function Day({ data, save, date, setDate }) {
                 <input value={f.activityNote} onChange={(e) => set("activityNote", e.target.value)} placeholder="Felt fine, or paid for it later" />
               </div>
             </div>
-            <p className="hint" style={{ marginTop: 8 }}>{plannedWo.length ? "Tap a planned workout to mark it done, modified, or skipped. Skipping on a bad day is data, not a miss." : "One-off activity goes here. Regular activities live in the Index and show up in today's routine."}</p>
+            <p className="hint" style={{ marginTop: 8 }}>{actShown.length || plannedWo.length ? "Tap once for done, twice for skipped. Skipping on a bad day is data, not a miss — and it's recorded differently from leaving it blank." : "Regular activities come from the Index on the days you schedule them. Anything else goes under + Add."}</p>
           </div>
 
           <div className="card">
@@ -410,36 +461,39 @@ export default function Day({ data, save, date, setDate }) {
               <button className="btn ghost sm" onClick={() => { setAddingRoutine(!addingRoutine); setNewRoutine(blankRoutine); }}>{addingRoutine ? "Cancel" : "+ Add"}</button>
             </div>
             {addingRoutine && <div className="inline-add">
-              <div className="ht-row">
-                <div className="ht-field" style={{ flex: 2 }}>What
-                  <select value={newRoutine.pick} onChange={(e) => setNewRoutine({ ...newRoutine, pick: e.target.value })} autoFocus>
-                    <option value="">Choose…</option>
-                    {INT_TYPE.map((k) => { const opts = notToday.filter((i) => kindOf(i) === k); return opts.length ? <optgroup key={k} label={KIND_LABEL[k]}>{opts.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup> : null; })}
-                    <option value="new">Something not in the Index…</option>
-                  </select>
-                </div>
-              </div>
-              {newRoutine.pick === "new" && <div className="ht-row">
-                <div className="ht-field" style={{ flex: 2 }}>Name<input value={newRoutine.name} onChange={(e) => setNewRoutine({ ...newRoutine, name: e.target.value })} placeholder="Ibuprofen, sauna, stretch" onKeyDown={(e) => e.key === "Enter" && submitRoutine()} /></div>
-                <div className="ht-field">Kind<select value={newRoutine.kind} onChange={(e) => setNewRoutine({ ...newRoutine, kind: e.target.value })}>{INT_TYPE.map((k) => <option key={k} value={k}>{SINGULAR[k]}</option>)}</select></div>
-                {newRoutine.kind !== "activity" && <div className="ht-field">Amount
-                  <div className="dose-fields">
-                    <input type="number" inputMode="decimal" min="0" step="any" value={newRoutine.amount} onChange={(e) => setNewRoutine({ ...newRoutine, amount: e.target.value })} placeholder="200" />
-                    <select value={newRoutine.unit} onChange={(e) => setNewRoutine({ ...newRoutine, unit: e.target.value })}><option value="">unit</option>{DOSE_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}</select>
-                  </div>
-                </div>}
+              {newRoutine.mode === "" && <div className="choice">
+                <button type="button" className="btn ghost sm" onClick={() => setNewRoutine({ ...newRoutine, mode: "index" })} disabled={!notTodayRoutine.length} title={notTodayRoutine.length ? "" : "Everything in your Index is already on today"}>From your Index</button>
+                <button type="button" className="btn ghost sm" onClick={() => setNewRoutine({ ...newRoutine, mode: "new" })}>Something not in the Index</button>
               </div>}
-              <button className="btn sm" onClick={submitRoutine} disabled={!newRoutine.pick || (newRoutine.pick === "new" && !newRoutine.name.trim())} style={{ marginBottom: 10 }}>Add to today</button>
-              <p className="hint" style={{ margin: "-4px 0 8px" }}>Only today changes. To make it a regular thing, add it in the Index with a schedule.</p>
+              {newRoutine.mode === "index" && <div className="ht-field">From your Index
+                <select value={newRoutine.pick} onChange={(e) => setNewRoutine({ ...newRoutine, pick: e.target.value })} autoFocus>
+                  <option value="">Choose…</option>
+                  {ROUTINE_KINDS.map((k) => { const opts = notTodayRoutine.filter((i) => kindOf(i) === k); return opts.length ? <optgroup key={k} label={KIND_LABEL[k]}>{opts.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup> : null; })}
+                </select>
+              </div>}
+              {newRoutine.mode === "new" && <div className="ht-row">
+                <div className="ht-field" style={{ flex: 2 }}>Name<input value={newRoutine.name} onChange={(e) => setNewRoutine({ ...newRoutine, name: e.target.value })} placeholder="Ibuprofen, Epsom bath" autoFocus onKeyDown={(e) => e.key === "Enter" && submitRoutine()} /></div>
+                <div className="ht-field">Kind<select value={newRoutine.kind} onChange={(e) => setNewRoutine({ ...newRoutine, kind: e.target.value, unit: e.target.value === "treatment" ? "min" : "mg" })}>{ROUTINE_KINDS.map((k) => <option key={k} value={k}>{SINGULAR[k]}</option>)}</select></div>
+                <div className="ht-field">{newRoutine.kind === "treatment" ? "How long or how much" : "Amount"}
+                  <div className="dose-fields">
+                    <input type="number" inputMode="decimal" min="0" step="any" value={newRoutine.amount} onChange={(e) => setNewRoutine({ ...newRoutine, amount: e.target.value })} placeholder={newRoutine.kind === "treatment" ? "20" : "200"} />
+                    <select value={newRoutine.unit} onChange={(e) => setNewRoutine({ ...newRoutine, unit: e.target.value })}><option value="">unit</option>{(newRoutine.kind === "treatment" ? [...TIME_UNITS, ...DOSE_UNITS] : DOSE_UNITS).map((u) => <option key={u} value={u}>{u}</option>)}</select>
+                  </div>
+                </div>
+              </div>}
+              {newRoutine.mode && <>
+                <button className="btn sm" onClick={submitRoutine} disabled={newRoutine.mode === "index" ? !newRoutine.pick : !newRoutine.name.trim()} style={{ marginBottom: 10 }}>Add to today</button>
+                <p className="hint" style={{ margin: "-4px 0 8px" }}>Only today changes. To make it a regular thing, add it in the Index with a schedule.</p>
+              </>}
             </div>}
-            {shownItems.length ? groups.map(([kind, items]) => (
+            {routineShown.length ? groups.map(([kind, items]) => (
               <div key={kind} className="rgroup">
                 {groups.length > 1 && <div className="rgroup-head">{KIND_LABEL[kind]}</div>}
-                <ul className="check">{items.map((i) => isActivity(i) ? renderActivity(i) : renderTake(i))}</ul>
+                <ul className="check">{items.map((i) => usesState(i) ? renderState(i) : renderTake(i))}</ul>
               </div>
-            )) : !(f.routineExtras || []).length && <p className="empty">Nothing scheduled today. Add supplements, medications, treatments, or activities in the Index and switch them on — or + Add something just for today.</p>}
+            )) : !(f.routineExtras || []).length && <p className="empty">Nothing scheduled today. Add supplements, medications, or treatments in the Index and switch them on — or + Add something just for today.</p>}
             {(f.routineExtras || []).length > 0 && <>
-              {shownItems.length > 0 && <div className="rgroup-head">Just today</div>}
+              {routineShown.length > 0 && <div className="rgroup-head">Just today</div>}
               <ul className="list" style={{ marginTop: 4 }}>
                 {f.routineExtras.map((x) => <li key={x.id}>
                   <span style={{ flex: 1 }}>{x.name}<span className="muted"> · {SINGULAR[x.kind] || x.kind}{x.amount != null ? ` · ${fmtAmt(x.amount)} ${unitFor(x.amount, x.unit)}` : ""}</span></span>
@@ -456,8 +510,8 @@ export default function Day({ data, save, date, setDate }) {
               {testingFoods.map((x) => <li key={x.id}><span>{x.name}</span><span className="pill testing">{x.kind === "drink" ? "drink test" : "food test"}</span></li>)}
             </ul>}
             {routine.length > 0 && <p className="hint" style={{ marginTop: 8 }}>
-              {takeItems.length > 0 && "Tap as you take things. Split doses start at one portion — + adds the next. "}
-              {actItems.length > 0 && "Tap an activity to cycle done, modified, skipped. Skipping on a bad day is data, not a miss."}
+              {routine.some((i) => !usesState(i)) && "Tap as you take things. Split doses start at one portion — + adds the next. "}
+              {routine.some(usesState) && "Treatments: tap once for done, twice for skipped."}
             </p>}
           </div>
         </div>

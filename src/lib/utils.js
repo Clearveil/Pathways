@@ -42,6 +42,9 @@ export const INT_TYPE = ["supplement", "medication", "treatment", "activity"];
 export const KIND_LABEL = { supplement: "Supplements", medication: "Medications", treatment: "Treatments", activity: "Activities" };
 const OLD_TYPE = { western: "medication", naturopathic: "treatment", lifestyle: "activity" };
 export const isActivity = (i) => i.type === "activity" || i.type === "lifestyle";
+// Treatments and activities are answered done or skipped (entries.activity_status);
+// supplements and medications are checked off as taken (entries.taken).
+export const usesStatus = (i) => isActivity(i) || i.type === "treatment";
 
 // Scheduling. days: null = every day, else weekday numbers 0 (Sun) .. 6 (Sat).
 export const DAY_SHORT = ["S", "M", "T", "W", "T", "F", "S"];
@@ -96,7 +99,7 @@ export const normDate = (d) => {
 };
 export const logged = (e) => e && e.energy != null;
 export const adherence = (data, e, ds) => {
-  const due = activeOn(data, ds).filter((i) => !isActivity(i));
+  const due = activeOn(data, ds).filter((i) => !usesStatus(i));
   if (!due.length) return null;
   const taken = (e?.taken || []).filter((id) => due.some((i) => i.id === id)).length;
   return { taken, due: due.length };

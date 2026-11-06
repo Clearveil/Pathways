@@ -201,7 +201,9 @@ export const css = `
   .dose-ctl .amt { min-width:58px; text-align:center; color:var(--ink2); }
   .check li.on .dose-ctl .amt.changed { color:var(--warn-ink); font-weight:500; }
   .dose-fields { display:flex; gap:8px; }
-  .dose-fields input[type=number] { width:84px; }
+  .dose-fields input[type=number] { width:84px; flex:1 1 60px; min-width:0; }
+  .dose-fields select { flex:0 1 auto; min-width:0; max-width:55%; }
+  .choice { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
   .dose-fields select { width:auto; }
 
   /* --- feel: no tap highlight, no double-tap zoom delay --- */
