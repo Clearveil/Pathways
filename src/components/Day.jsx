@@ -4,6 +4,23 @@ import { Trash } from "./Icons.jsx";
 import Repeat from "./Repeat.jsx";
 import { DOSE_UNITS, TIME_UNITS, doseLabel, doseStep, fmtAmt, partsOf, portionOf, unitFor } from "../lib/dose.js";
 
+// The day's overall activity level, taken from what was actually done:
+// the hardest activity marked done (Index activities by their intensity,
+// one-offs by theirs). It replaces a level that was set automatically and
+// only ever raises one picked by hand, so checking off a workout can't
+// leave the day saying "rest".
+const LEVEL_RANK = { "": 0, rest: 0, light: 1, moderate: 2, hard: 3 };
+export function withAutoLevel(next, interventions) {
+  const st = next.activityStatus || {};
+  const fromIndex = interventions.filter((i) => isActivity(i) && i.intensity && (st[i.id] === "done" || st[i.id] === "modified")).map((i) => i.intensity);
+  const fromOneOffs = (next.extraWorkouts || []).map((x) => x.intensity).filter(Boolean);
+  const top = [...fromIndex, ...fromOneOffs].sort((a, b) => LEVEL_RANK[b] - LEVEL_RANK[a])[0] || "";
+  if (next.activityAuto || !next.activity) return { ...next, activity: top, activityAuto: !!top };
+  if (LEVEL_RANK[top] > LEVEL_RANK[next.activity]) return { ...next, activity: top, activityAuto: true };
+  return next;
+}
+const INTENSITY = ["light", "moderate", "hard"];
+
 const SINGULAR = { supplement: "supplement", medication: "medication", treatment: "treatment", activity: "activity" };
 
 // Most recent distinct items from the last `days` days of entries, newest
@@ -131,12 +148,13 @@ export default function Day({ data, save, date, setDate }) {
     if (nx) woStatus[k] = nx; else delete woStatus[k];
     saveEntry({ ...f, date, woStatus });
   };
+  const saveAct = (next) => saveEntry(withAutoLevel(next, data.interventions));
   const addWo = () => {
     if (!newWo.workout.trim()) return;
-    saveEntry({ ...f, date, extraWorkouts: [...(f.extraWorkouts || []), { id: uid(), workout: newWo.workout.trim(), details: newWo.details.trim() }] });
-    setNewWo({ workout: "", details: "" }); setAddingWo(false);
+    saveAct({ ...f, date, extraWorkouts: [...(f.extraWorkouts || []), { id: uid(), workout: newWo.workout.trim(), details: newWo.details.trim(), intensity: newWo.intensity || "" }] });
+    setNewWo({ workout: "", details: "", intensity: "" }); setAddingWo(false);
   };
-  const removeWo = (id) => saveEntry({ ...f, date, extraWorkouts: (f.extraWorkouts || []).filter((x) => x.id !== id) });
+  const removeWo = (id) => saveAct({ ...f, date, extraWorkouts: (f.extraWorkouts || []).filter((x) => x.id !== id) });
 
   // ---- Routine and activities -------------------------------------------
   // Supplements, medications and treatments live in Today's routine;
@@ -176,7 +194,7 @@ export default function Day({ data, save, date, setDate }) {
     if (state) activityStatus[i.id] = state; else delete activityStatus[i.id];
     if (state === "done" && i.doseAmount != null) doses[i.id] = doses[i.id] ?? firstAmount(i);
     if (state !== "done") delete doses[i.id];
-    saveEntry({ ...f, date, activityStatus, doses });
+    (isActivity(i) ? saveAct : saveEntry)({ ...f, date, activityStatus, doses });
   };
   const cycleState = (i) => setState(i, NEXT_STATE[stOf(i)]);
   const adjustDose = (i, delta) => {
@@ -205,10 +223,10 @@ export default function Day({ data, save, date, setDate }) {
   const pickWo = () => { const i = data.interventions.find((x) => x.id === woPick); if (i) addFromIndex(i); closeWo(); };
   const closeWo = () => { setAddingWo(false); setWoMode(""); setWoPick(""); setNewWo({ workout: "", details: "" }); };
   const woRepeat = [
-    ...notTodayActs.map((i) => ({ key: "i" + i.id, label: i.name, detail: `${i.doseNote ? i.doseNote + " · " : ""}not scheduled today`, onPick: () => addFromIndex(i) })),
-    ...recent(data.entries, date, (e) => e.extraWorkouts, (x) => `${x.workout.toLowerCase()}|${(x.details || "").toLowerCase()}`)
+    ...notTodayActs.map((i) => ({ key: "i" + i.id, label: i.name, detail: [i.doseNote, i.intensity, "not scheduled today"].filter(Boolean).join(" · "), onPick: () => addFromIndex(i) })),
+    ...recent(data.entries, date, (e) => e.extraWorkouts, (x) => `${x.workout.toLowerCase()}|${(x.details || "").toLowerCase()}`, 8, 120)
       .filter((x) => !(f.extraWorkouts || []).some((y) => y.workout === x.workout && y.details === x.details))
-      .map((x) => ({ key: "r" + x.workout + x.details, label: x.workout, detail: x.details || "recent", onPick: () => saveEntry({ ...f, date, extraWorkouts: [...(f.extraWorkouts || []), { id: uid(), workout: x.workout, details: x.details || "" }] }) })),
+      .map((x) => ({ key: "r" + x.workout + x.details, label: x.workout, detail: [x.details, x.intensity].filter(Boolean).join(" · ") || "recent", onPick: () => saveAct({ ...f, date, extraWorkouts: [...(f.extraWorkouts || []), { id: uid(), workout: x.workout, details: x.details || "", intensity: x.intensity || "" }] }) })),
   ];
 
   // Routine card: + Add starts with a choice — from the Index, or something
@@ -415,7 +433,7 @@ export default function Day({ data, save, date, setDate }) {
             </ul>}
             {(f.extraWorkouts || []).length > 0 && <ul className="list" style={{ marginTop: 8 }}>
               {f.extraWorkouts.map((x) => <li key={x.id}>
-                <span style={{ flex: 1 }}>{x.workout}{x.details ? <span className="muted"> · {x.details}</span> : null}</span>
+                <span style={{ flex: 1 }}>{x.workout}{[x.details, x.intensity].filter(Boolean).length ? <span className="muted"> · {[x.details, x.intensity].filter(Boolean).join(" · ")}</span> : null}</span>
                 <span className="muted" style={{ fontSize: 12 }}>one-off</span>
                 <button className="ht-link" style={{ padding: "0 4px", fontSize: 13, lineHeight: 1 }} onClick={() => removeWo(x.id)} title="Remove">×</button>
               </li>)}
@@ -438,13 +456,15 @@ export default function Day({ data, save, date, setDate }) {
                 <div className="ht-row">
                   <div className="ht-field" style={{ flex: 2 }}>What you did<input value={newWo.workout} onChange={(e) => setNewWo({ ...newWo, workout: e.target.value })} placeholder="Walk, lifting, job site" autoFocus onKeyDown={(e) => e.key === "Enter" && (addWo(), closeWo())} /></div>
                   <div className="ht-field">Details<input value={newWo.details} onChange={(e) => setNewWo({ ...newWo, details: e.target.value })} placeholder="25 min, easy" onKeyDown={(e) => e.key === "Enter" && (addWo(), closeWo())} /></div>
+                  <div className="ht-field">How hard<select value={newWo.intensity || ""} onChange={(e) => setNewWo({ ...newWo, intensity: e.target.value })}><option value="">—</option>{INTENSITY.map((x) => <option key={x} value={x}>{x}</option>)}</select></div>
                 </div>
                 <button className="btn sm" onClick={() => { addWo(); closeWo(); }} disabled={!newWo.workout.trim()} style={{ marginBottom: 10 }}>Log it</button>
               </>}
             </div>}
             <div className="ht-row" style={{ marginTop: 12 }}>
               <div className="ht-field" style={{ marginBottom: 4 }}>How hard overall
-                <select value={f.activity} onChange={(e) => set("activity", e.target.value)}><option value="">Not set</option>{ACTIVITY.map((a) => <option key={a} value={a}>{a}</option>)}</select>
+                <select value={f.activity} onChange={(e) => { const v = e.target.value; setF((p) => ({ ...p, activity: v, activityAuto: false })); }}><option value="">Not set</option>{ACTIVITY.map((a) => <option key={a} value={a}>{a}</option>)}</select>
+                {f.activityAuto && f.activity && <span className="hint">Set from what you did — change it if the day was harder overall.</span>}
               </div>
               <div className="ht-field" style={{ flex: 2, marginBottom: 4 }}>Note
                 <input value={f.activityNote} onChange={(e) => set("activityNote", e.target.value)} placeholder="Felt fine, or paid for it later" />

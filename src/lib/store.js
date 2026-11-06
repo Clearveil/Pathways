@@ -31,7 +31,7 @@ const TABLES = {
       id: e.id, date: e.date,
       energy: e.energy ?? null, inflammation: e.inflammation ?? null, clarity: e.clarity ?? null, stress: e.stress ?? null,
       flare: !!e.flare, severity: e.severity ?? null,
-      activity: nul(e.activity), activity_note: nul(e.activityNote), notes: nul(e.notes),
+      activity: nul(e.activity), activity_auto: !!e.activityAuto, activity_note: nul(e.activityNote), notes: nul(e.notes),
       taken: e.taken || [], doses: e.doses || {}, meals_done: e.meals || [], wo_status: e.woStatus || {},
       extras: e.extras || [], extra_workouts: e.extraWorkouts || [], drinks: e.drinks || [], activity_status: e.activityStatus || {}, routine_extras: e.routineExtras || [],
       updated_at: stamp(e.updatedAt),
@@ -39,7 +39,7 @@ const TABLES = {
     fromRow: (r) => ({
       id: r.id, date: r.date,
       energy: r.energy, inflammation: r.inflammation, clarity: r.clarity, stress: r.stress, flare: r.flare, severity: r.severity,
-      activity: str(r.activity), activityNote: str(r.activity_note), notes: str(r.notes),
+      activity: str(r.activity), activityAuto: !!r.activity_auto, activityNote: str(r.activity_note), notes: str(r.notes),
       taken: r.taken || [], doses: r.doses || {}, meals: r.meals_done || [], woStatus: r.wo_status || {},
       extras: r.extras || [], extraWorkouts: r.extra_workouts || [], drinks: r.drinks || [], activityStatus: r.activity_status || {}, routineExtras: r.routine_extras || [],
       updatedAt: stamp(r.updated_at),
@@ -52,8 +52,8 @@ const TABLES = {
   },
   interventions: {
     table: "interventions", order: "start_date",
-    toRow: (i) => ({ id: i.id, name: i.name, type: i.type, dose: nul(doseLabel(i)), dose_amount: i.doseAmount ?? null, dose_unit: nul(i.doseUnit), dose_note: nul(i.doseNote), source: nul(i.source), start_date: nul(i.start), end_date: nul(i.end), status: i.status, outcome: nul(i.outcome), doses_per_day: i.dosesPerDay || 1, days: i.days?.length && i.days.length < 7 ? i.days : null, times: (i.times || []).filter(Boolean).length ? i.times.filter(Boolean) : null, updated_at: stamp(i.updatedAt) }),
-    fromRow: (r) => ({ id: r.id, name: r.name, type: r.type, dose: str(r.dose), doseAmount: r.dose_amount == null ? null : Number(r.dose_amount), doseUnit: str(r.dose_unit), doseNote: str(r.dose_note), source: str(r.source), start: str(r.start_date), end: str(r.end_date), status: r.status, outcome: str(r.outcome), dosesPerDay: r.doses_per_day || 1, days: r.days?.length ? r.days : null, times: r.times || [], updatedAt: stamp(r.updated_at) }),
+    toRow: (i) => ({ id: i.id, name: i.name, type: i.type, dose: nul(doseLabel(i)), dose_amount: i.doseAmount ?? null, dose_unit: nul(i.doseUnit), dose_note: nul(i.doseNote), source: nul(i.source), start_date: nul(i.start), end_date: nul(i.end), status: i.status, outcome: nul(i.outcome), intensity: nul(i.intensity), doses_per_day: i.dosesPerDay || 1, days: i.days?.length && i.days.length < 7 ? i.days : null, times: (i.times || []).filter(Boolean).length ? i.times.filter(Boolean) : null, updated_at: stamp(i.updatedAt) }),
+    fromRow: (r) => ({ id: r.id, name: r.name, type: r.type, dose: str(r.dose), doseAmount: r.dose_amount == null ? null : Number(r.dose_amount), doseUnit: str(r.dose_unit), doseNote: str(r.dose_note), source: str(r.source), start: str(r.start_date), end: str(r.end_date), status: r.status, outcome: str(r.outcome), intensity: str(r.intensity), dosesPerDay: r.doses_per_day || 1, days: r.days?.length ? r.days : null, times: r.times || [], updatedAt: stamp(r.updated_at) }),
   },
   meals: {
     table: "meal_plan", order: "date",

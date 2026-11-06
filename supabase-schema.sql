@@ -294,3 +294,14 @@ alter table public.foods
 -- [{id, name, kind, amount, unit, qty}].
 alter table public.entries
   add column routine_extras jsonb not null default '[]';
+
+-- ---------------------------------------------------------------------------
+-- Migration `activity_intensity` (2026-11-06).
+-- ---------------------------------------------------------------------------
+-- How hard an activity is, set once in the Index.
+alter table public.interventions
+  add column intensity text check (intensity in ('light','moderate','hard'));
+-- True when the day's activity level was set automatically from the hardest
+-- activity marked done; false when picked by hand.
+alter table public.entries
+  add column activity_auto boolean not null default false;

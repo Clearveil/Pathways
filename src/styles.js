@@ -191,6 +191,8 @@ export const css = `
   .kv input { border-bottom:1px solid var(--line); padding:2px 0; }
   .lrow-actions { display:flex; justify-content:flex-end; gap:2px; padding-top:4px; }
   .day-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .day-actions > .ht-link.with-icon { font-size:12px; color:var(--mute); padding:4px 6px; white-space:nowrap; }
+  .day-actions > .ht-link.with-icon:hover { color:var(--bad); background:var(--bad-soft); }
   .day-actions .confirm { font-size:13px; color:var(--ink2); display:inline-flex; align-items:center; gap:4px; flex-wrap:wrap; }
   .ht-link.danger { color:var(--bad); }
   .ht-link.danger:hover { background:var(--bad-soft); color:var(--bad); }
@@ -271,7 +273,7 @@ export const css = `
     .ht-spacer, .desk-only { display:none; }
     .mob-only { display:inline-flex; }
     .menu-text { display:none; }
-    .ht-link.with-icon { border:1px solid var(--line); background:var(--card); width:32px; height:32px; padding:0; justify-content:center; }
+    .ht-actions .ht-link.with-icon { border:1px solid var(--line); background:var(--card); width:32px; height:32px; padding:0; justify-content:center; }
     .csv-grid { grid-template-columns:1fr; }
     .modal { padding:18px 16px; }
     .ht-nav h2 { font-size:16px; }

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 // or saved items for that section. One tap adds the item. The button itself
 // never shows item names, so the card stays calm.
 //   items: [{ key, label, detail, onPick }]
-export default function Repeat({ items, label = "Repeat" }) {
+export default function Repeat({ items, label = "Repeat", empty = "Nothing to repeat yet — things you log here will show up next time." }) {
   const [open, setOpen] = useState(false);
   const ref = useRef();
   useEffect(() => {
@@ -15,7 +15,6 @@ export default function Repeat({ items, label = "Repeat" }) {
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
   }, [open]);
-  if (!items.length) return null;
   return (
     <div className="menu-wrap" ref={ref}>
       <button type="button" className="btn ghost sm repeat-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
@@ -24,6 +23,7 @@ export default function Repeat({ items, label = "Repeat" }) {
       </button>
       {open && (
         <div className="menu repeat-menu">
+          {!items.length && <p className="hint" style={{ padding: "8px 10px", margin: 0 }}>{empty}</p>}
           {items.map((it) => (
             <button key={it.key} type="button" onClick={() => { it.onPick(); setOpen(false); }}>
               {it.label}{it.detail ? <small>{it.detail}</small> : null}

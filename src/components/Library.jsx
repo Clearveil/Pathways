@@ -62,7 +62,7 @@ function DayPicker({ days, onChange }) {
 
 function Interventions({ kind, data, save, openWindow }) {
   const act = kind === "activity";
-  const blank = { name: "", type: kind, measure: kind === "treatment" ? "time" : "dose", doseAmount: "", doseUnit: act ? "" : kind === "treatment" ? "min" : "mg", doseNote: "", dosesPerDay: 1, days: null, times: [], start: today(), end: "", source: "", status: "baseline" };
+  const blank = { name: "", type: kind, intensity: kind === "activity" ? "moderate" : "", measure: kind === "treatment" ? "time" : "dose", doseAmount: "", doseUnit: act ? "" : kind === "treatment" ? "min" : "mg", doseNote: "", dosesPerDay: 1, days: null, times: [], start: today(), end: "", source: "", status: "baseline" };
   const narrow = useNarrow();
   const [f, setF] = useState(blank);
   const [warn, setWarn] = useState("");
@@ -73,7 +73,7 @@ function Interventions({ kind, data, save, openWindow }) {
   const block = () => setWarn(`${openWindow.name} is already being tested. One open test at a time — otherwise you won't know which change did what.`);
   const closeForm = () => { setF(blank); setEditing(null); setAdding(false); setDoseChange(null); };
   const startEdit = (x) => {
-    setF({ name: x.name, type: isActivity(x) ? "activity" : x.type, measure: TIME_UNITS.includes(x.doseUnit) ? "time" : "dose", doseAmount: x.doseAmount ?? "", doseUnit: x.doseUnit || "", doseNote: x.doseNote || "", dosesPerDay: x.dosesPerDay || 1, days: x.days || null, times: x.times || [], start: x.start || "", end: x.end || "", source: x.source || "", status: x.status });
+    setF({ name: x.name, type: isActivity(x) ? "activity" : x.type, intensity: x.intensity || "", measure: TIME_UNITS.includes(x.doseUnit) ? "time" : "dose", doseAmount: x.doseAmount ?? "", doseUnit: x.doseUnit || "", doseNote: x.doseNote || "", dosesPerDay: x.dosesPerDay || 1, days: x.days || null, times: x.times || [], start: x.start || "", end: x.end || "", source: x.source || "", status: x.status });
     setEditing(x.id); setAdding(true); setWarn(""); setDoseChange(null);
   };
   const applyEdit = (patch) => { save({ ...data, interventions: data.interventions.map((x) => x.id === editing ? { ...x, ...patch } : x) }); closeForm(); };
@@ -112,7 +112,7 @@ function Interventions({ kind, data, save, openWindow }) {
     else update(x.id, { end: "", start: x.start || today(), status: x.status === "discontinued" ? "baseline" : x.status });
   };
   const onCount = mine.filter(isOn).length;
-  const amountText = (x) => act ? (x.doseNote || "—") : TIME_UNITS.includes(x.doseUnit) ? (doseLabel(x) || "—") : (doseLabel(x) ? `${doseLabel(x)}${partsOf(x) > 1 ? ` · in ${partsOf(x)} doses` : ""}` : "—");
+  const amountText = (x) => act ? ([x.doseNote, x.intensity].filter(Boolean).join(" · ") || "—") : TIME_UNITS.includes(x.doseUnit) ? (doseLabel(x) || "—") : (doseLabel(x) ? `${doseLabel(x)}${partsOf(x) > 1 ? ` · in ${partsOf(x)} doses` : ""}` : "—");
   const onSwitch = (x) => <button className={"switch" + (isOn(x) ? " on" : "")} onClick={() => toggleOn(x)} title={isOn(x) ? "On the routine — switch off" : "Off the routine — switch on"} />;
   const statusSelect = (x) => <select value={x.status} onChange={(e) => update(x.id, { status: e.target.value })} className={`pill ${x.status}`}>{INT_STATUS.map((s) => <option key={s}>{s}</option>)}</select>;
   const endInput = (x) => <input type="date" value={x.end || ""} onChange={(e) => update(x.id, { end: e.target.value })} style={{ width: 118 }} />;
@@ -135,9 +135,16 @@ function Interventions({ kind, data, save, openWindow }) {
         <div className="ht-row">
           <div className="ht-field">Name<input value={f.name} onChange={(e) => set("name", e.target.value)} placeholder={formAct ? "Morning walk" : kind === "medication" ? "Low-dose naltrexone" : kind === "treatment" ? "Infrared sauna" : "Magnesium glycinate"} autoFocus /></div>
           {editing && <div className="ht-field">Section<select value={f.type} onChange={(e) => set("type", e.target.value)}>{INT_TYPE.map((s) => <option key={s} value={s}>{KIND_LABEL[s]}</option>)}</select></div>}
-          {formAct ? (
+          {formAct ? <>
             <div className="ht-field" style={{ flex: 2 }}>Details<input value={f.doseNote} onChange={(e) => set("doseNote", e.target.value)} placeholder="30 min, easy pace" /></div>
-          ) : <>
+            <div className="ht-field">How hard
+              <select value={f.intensity || "moderate"} onChange={(e) => set("intensity", e.target.value)}>
+                <option value="light">Light</option>
+                <option value="moderate">Moderate</option>
+                <option value="hard">Hard</option>
+              </select>
+            </div>
+          </> : <>
             {f.type === "treatment" && <div className="ht-field">Measured by
               <select value={f.measure} onChange={(e) => setMeasure(e.target.value)}>
                 <option value="time">Length of time</option>
