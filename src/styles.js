@@ -258,16 +258,16 @@ export const css = `
   .trends-card { padding-bottom:10px; }
   /* Measure pills: legend + toggle + snapshot. On = filled solid with a
      check; off = faded outline, no check. */
-  .tiles { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
-  .tile { font:inherit; font-size:12px; display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 10px 0 8px; border-radius:999px; cursor:pointer; white-space:nowrap;
+  .tiles { display:grid; grid-template-columns:repeat(4, minmax(0,196px)); justify-content:center; gap:6px; margin:8px 0 10px; }
+  .tile { font:inherit; font-size:11px; display:flex; align-items:center; justify-content:center; gap:5px; height:24px; padding:0 8px; border-radius:999px; cursor:pointer; white-space:nowrap; min-width:0; overflow:hidden;
     border:1px solid var(--acc); background:var(--acc); color:var(--on-acc); transition:background .12s, color .12s, border-color .12s, opacity .12s; }
   .tile:hover { box-shadow:0 0 8px var(--glow); }
   .tile.off { background:transparent; border-color:var(--line); color:var(--mute); }
   .tile.off:hover { border-color:var(--ink2); color:var(--ink2); box-shadow:none; }
-  .tile-check { width:10px; font-size:11px; text-align:center; }
+  .tile-check { width:9px; font-size:10px; text-align:center; flex-shrink:0; }
   .tile svg { flex-shrink:0; display:block; }
   .tile-avg { font-weight:600; font-variant-numeric:tabular-nums; }
-  .tile-delta { font-size:11px; opacity:.85; font-variant-numeric:tabular-nums; }
+  .tile-delta { font-size:10px; opacity:.85; font-variant-numeric:tabular-nums; }
   .tile.off .tile-avg, .tile.off .tile-delta { opacity:.7; }
   /* better / worse arrow: the app's existing good / bad colours, picked to
      read on the pill (filled pills are dark in light mode, light in dark). */
@@ -277,7 +277,7 @@ export const css = `
   .tile-delta.good { color:var(--pill-good); opacity:1; }
   .tile-delta.bad { color:var(--pill-bad); opacity:1; }
   .lbl-short { display:none; }
-  .view-row { display:flex; align-items:flex-start; gap:10px; margin-bottom:6px; }
+  .view-row { display:flex; align-items:flex-start; gap:10px; margin:0; }
   .view-row .hint { flex:1; margin:0; }
   .seg { display:inline-flex; border:1px solid var(--line); border-radius:9px; padding:2px; background:var(--bg2); flex-shrink:0; }
   .seg button { font:inherit; font-size:12px; border:0; background:none; color:var(--ink2); padding:4px 9px; border-radius:7px; cursor:pointer; }
@@ -308,7 +308,8 @@ export const css = `
     .tile-word { display:none; }
     .lbl-full { display:none; }
     .lbl-short { display:inline; }
-    .view-row { flex-direction:column-reverse; }
+    .view-row { flex-direction:column; }
+    .tiles { grid-template-columns:repeat(2, minmax(0,1fr)); }
     .daypick button { width:36px; height:36px; }
     .ht-top { padding:calc(14px + env(safe-area-inset-top)) 14px 0; }
     .ht-main { padding:12px 14px calc(50px + env(safe-area-inset-bottom)); }
