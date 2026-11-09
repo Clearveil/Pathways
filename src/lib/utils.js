@@ -98,6 +98,19 @@ export const normDate = (d) => {
   return isNaN(p) ? null : iso(p);
 };
 export const logged = (e) => e && e.energy != null;
+
+// Every change to what you take or do: each Index item starting, and
+// stopping (the day after its end date). Grouped by date, because things
+// that change on the same day can't be told apart.
+export function changesOf(data) {
+  const KIND = { supplement: "supplement", medication: "medication", treatment: "treatment", activity: "activity", lifestyle: "activity", western: "medication", naturopathic: "treatment" };
+  const by = {};
+  data.interventions.forEach((i) => {
+    if (i.start) (by[i.start] ||= []).push({ verb: "Started", name: i.name, kind: KIND[i.type] || i.type, id: i.id, test: i.status === "testing" || i.status === "established" || i.status === "discontinued" });
+    if (i.end && i.end < today()) { const d = addDays(i.end, 1); (by[d] ||= []).push({ verb: "Stopped", name: i.name, kind: KIND[i.type] || i.type, id: i.id, test: false }); }
+  });
+  return Object.keys(by).sort().map((date) => ({ date, items: by[date] }));
+}
 // Anything at all recorded for the day (kept for future use). A day counts
 // as "missed" for the routine only once its ratings are filled in, or once
 // something on it has been checked off. A day with nothing is left blank

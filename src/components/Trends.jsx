@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ReferenceArea, ResponsiveContainer, CartesianGrid } from "recharts";
-import { today, addDays, logged } from "../lib/utils.js";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ReferenceArea, ReferenceLine, ResponsiveContainer, CartesianGrid } from "recharts";
+import { today, addDays, logged, changesOf } from "../lib/utils.js";
 import { buildInsights, GROUPS } from "../lib/insights.js";
 
 // Trends: all four measures on one chart by default, each toggled by its
@@ -62,6 +62,10 @@ export default function Trends({ data, dark }) {
   }, [data, from, to, weekly]);
 
   const present = MEASURES.filter((m) => entries.some((e) => e[m.key] != null));
+  // Starts and stops inside the range, drawn as thin dotted lines. On
+  // weekly views they snap to the week they fall in.
+  const marks = changesOf(data).filter((ch) => ch.date >= from && ch.date <= to)
+    .map((ch) => ({ x: weekly ? mondayOf(ch.date) : ch.date, label: ch.items.length === 1 ? `${ch.items[0].verb === "Started" ? "+" : "−"} ${ch.items[0].name}` : `${ch.items.length} changes`, title: ch.items.map((x) => `${x.verb} ${x.name}`).join(", ") }));
   const windows = data.interventions.filter((i) => i.start && i.status !== "baseline").map((i) => ({ ...i, end: i.end || today() }))
     .filter((w) => w.start <= to && w.end >= from).map((w) => ({ ...w, x1: weekly ? mondayOf(w.start < from ? from : w.start) : (w.start < from ? from : w.start), x2: weekly ? mondayOf(w.end > to ? to : w.end) : (w.end > to ? to : w.end) }));
   const tickFmt = (d) => {
@@ -107,6 +111,8 @@ export default function Trends({ data, dark }) {
             );
             const tip = <Tooltip labelFormatter={tipLabel} formatter={(v, name) => [v == null ? "—" : Number(v).toFixed(weekly ? 1 : 0), name]}
               contentStyle={{ borderRadius: 10, border: `1px solid ${c.line}`, background: c.card, color: c.ink, fontSize: 12 }} cursor={{ stroke: c.mute, strokeDasharray: "3 3" }} />;
+            const lines = (labels) => marks.map((mk, k) => <ReferenceLine key={"m" + k} x={mk.x} stroke={c.mute} strokeDasharray="2 3" strokeWidth={1}
+              label={labels ? { value: mk.label.length > 18 ? mk.label.slice(0, 17) + "…" : mk.label, position: "insideBottomLeft", fontSize: 9, fill: c.mute, angle: -90, dx: 8, dy: -4 } : undefined} />);
             const bands = (labels) => windows.map((w) => <ReferenceArea key={w.id} x1={w.x1} x2={w.x2} fill={c.band} fillOpacity={dark ? 0.16 : 0.07} label={labels ? { value: w.name, position: "insideTopLeft", fontSize: 10, fill: c.mute } : undefined} />);
             if (view === "combined") return (
               <div style={{ height: 300, fontSize: 11 }}>
@@ -117,6 +123,7 @@ export default function Trends({ data, dark }) {
                     <YAxis domain={[0, 10]} ticks={[0, 2, 4, 6, 8, 10]} stroke={c.mute} tickLine={false} axisLine={false} width={22} />
                     {tip}
                     {bands(true)}
+                    {lines(true)}
                     {shown.map(lineFor)}
                   </LineChart>
                 </ResponsiveContainer>
@@ -133,6 +140,7 @@ export default function Trends({ data, dark }) {
                       <YAxis domain={[0, 10]} ticks={[0, 5, 10]} stroke={c.mute} tickLine={false} axisLine={false} width={22} />
                       {tip}
                       {bands(idx === 0)}
+                      {lines(idx === 0)}
                       {lineFor(m)}
                     </LineChart>
                   </ResponsiveContainer>
@@ -160,7 +168,7 @@ export default function Trends({ data, dark }) {
           </div>
           <div className="view-row">
             <span className="hint">
-              {inWin.length} logged day{inWin.length === 1 ? "" : "s"}{priorLabel ? ` · numbers are range averages, arrows the change vs the ${priorLabel}` : " · numbers are range averages"}{weekly ? " · weekly averages" : ""}. Tap a measure to show or hide it. Shaded bands are tests{present.some((m) => m.key === "energy") ? "; red dots are flare days" : ""}.
+              {inWin.length} logged day{inWin.length === 1 ? "" : "s"}{priorLabel ? ` · numbers are range averages, arrows the change vs the ${priorLabel}` : " · numbers are range averages"}{weekly ? " · weekly averages" : ""}. Tap a measure to show or hide it. Shaded bands are tests; dotted lines mark something started (+) or stopped (−){present.some((m) => m.key === "energy") ? "; red dots are flare days" : ""}.
             </span>
             <div className="seg" role="group" aria-label="Chart layout">
               <button type="button" className={view === "combined" ? "on" : ""} onClick={() => setView("combined")} aria-pressed={view === "combined"}>One chart</button>

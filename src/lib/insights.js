@@ -11,7 +11,7 @@
 // The verdict sentence on each card uses the same thresholds as the group,
 // so a card can't say "no clear difference" and sit under Macro.
 
-import { today, addDays, mealsOn, workoutsOn, logged, adherence, usesStatus, scheduledOn } from "./utils.js";
+import { today, addDays, mealsOn, workoutsOn, logged, adherence, usesStatus, scheduledOn, changesOf } from "./utils.js";
 
 export const NOISE = 0.5;  // under this, day-to-day noise
 export const CLEAR = 1.0;  // at or over this (with enough days), a clear gap
@@ -171,6 +171,32 @@ export function buildInsights(data) {
     card({ kind: "compare", effect: g, n: Math.min(inside.length, before.length), span: spanOf(inside), tone: toneOf(g), title: `${i.name} (${inside.length} days)`,
       body: `Energy averaged ${avg(inside).toFixed(1)} during vs ${avg(before).toFixed(1)} in the two weeks before.${infTxt(inside, before)} Flare days: ${Math.round(flareRate(inside) * 100)}% vs ${Math.round(flareRate(before) * 100)}%${Math.abs(fd) > 0.15 ? (fd < 0 ? " — fewer, which matters more than any single average." : " — more, which matters more than any single average.") : "."} ${say(gi, "A real-looking difference — worth keeping, but one window isn't proof.", "Worse than before. If nothing else changed, that's a signal to stop and see if it recovers.", "No clear difference. That's a valid result — this one probably isn't doing much either way.")}` });
   });
+
+  // ---- Every start and stop, not just tests ---------------------------------------
+  // Two weeks before a change vs two weeks after. A new medication or
+  // activity at baseline changes things too, so it gets judged the same way
+  // a test does. Anything else that changed inside those four weeks is
+  // named, and marks the result mixed: two changes at once can't be told
+  // apart, which is the whole reason for testing one thing at a time.
+  {
+    const all = changesOf(data);
+    all.forEach((ch) => {
+      const items = ch.items.filter((x) => !(x.verb === "Started" && x.test));   // test windows have their own card
+      if (!items.length) return;
+      const before = inRange(addDays(ch.date, -14), addDays(ch.date, -1));
+      const after = inRange(ch.date, addDays(ch.date, 13));
+      if (before.length < 5) return;   // started before you were logging: no baseline, nothing honest to say
+      const what = items.map((x) => `${x.verb.toLowerCase()} ${x.name}`).join(", ");
+      const title = items.length === 1 ? `${items[0].verb} ${items[0].name}` : `Changes on ${new Date(ch.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+      const others = all.filter((o) => o.date !== ch.date && o.date >= addDays(ch.date, -14) && o.date <= addDays(ch.date, 13)).flatMap((o) => o.items.map((x) => `${x.verb.toLowerCase()} ${x.name}`));
+      const tangled = items.length > 1 || others.length > 0;
+      const note = (items.length > 1 ? ` These happened on the same day (${what}), so their effects can't be separated.` : "") + (others.length ? ` Also within two weeks either side: ${others.join(", ")} — so this can't be read on its own.` : "");
+      if (after.length < 5) return card({ kind: "waiting", tone: "flat", title, body: `${after.length} day${after.length === 1 ? "" : "s"} logged since. Five is the minimum before comparing against the two weeks before.${note}` });
+      const gi = gapInfo(after, before), g = gi.g;
+      card({ kind: "compare", mixed: tangled, effect: g, n: Math.min(before.length, after.length), span: 28, tone: tangled ? "flat" : toneOf(g), title,
+        body: `Two weeks after vs the two weeks before: energy ${avg(after).toFixed(1)} vs ${avg(before).toFixed(1)}.${infTxt(after, before)} Flare days ${Math.round(flareRate(after) * 100)}% vs ${Math.round(flareRate(before) * 100)}%.${note} ${say(gi, "Things improved after it.", "Things got worse after it.", "No clear difference either side of it.")}` });
+    });
+  }
 
   // ---- Day of week ------------------------------------------------------------------
   if (n >= 21) {
