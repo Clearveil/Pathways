@@ -244,6 +244,32 @@ export const css = `
   .daypick button.on { background:var(--acc); border-color:var(--acc); color:var(--on-acc); }
   .time-fields { display:flex; gap:6px; flex-wrap:wrap; }
   .time-fields input { width:118px; }
+  /* --- trends: range row, small multiples, insight groups --- */
+  .range-row { display:flex; flex-wrap:wrap; gap:4px; margin:0 0 10px; }
+  .range-row button { font:inherit; font-size:12px; border:1px solid var(--line); background:var(--card); color:var(--ink2); border-radius:999px; padding:5px 11px; cursor:pointer; }
+  .range-row button.on { background:var(--acc); border-color:var(--acc); color:var(--on-acc); }
+  .range-custom { display:flex; gap:10px; flex-wrap:wrap; margin:0 0 10px; font-size:12px; color:var(--ink2); }
+  .range-custom label { display:flex; align-items:center; gap:6px; }
+  .range-custom input { font:inherit; font-size:13px; color:var(--ink); padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:var(--field); }
+  .ht.dark .range-custom input { color-scheme:dark; }
+  .trends-card { padding-bottom:10px; }
+  .spark + .spark { border-top:1px solid var(--line2); margin-top:4px; padding-top:8px; }
+  .spark-head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .spark-label { font-size:13px; font-weight:500; }
+  .spark-avg { font-size:17px; font-variant-numeric:tabular-nums; }
+  .spark-avg small { font-size:11px; color:var(--mute); margin-left:2px; }
+  .spark-delta { font-size:12px; color:var(--ink2); margin-left:auto; font-variant-numeric:tabular-nums; }
+  .ins-head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin:20px 0 8px; }
+  .ins-head h3 { margin:0; font-size:17px; }
+  .ins-group { border:1px solid var(--line); border-radius:14px; background:var(--card); margin-bottom:10px; }
+  .ins-group summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:10px; padding:12px 16px; font-size:14px; }
+  .ins-group summary::-webkit-details-marker { display:none; }
+  .ins-group summary::after { content:""; margin-left:auto; width:7px; height:7px; border-right:1.5px solid var(--mute); border-bottom:1.5px solid var(--mute); transform:rotate(45deg); transition:transform .15s; }
+  .ins-group[open] summary::after { transform:rotate(-135deg); }
+  .ins-title { font-weight:500; }
+  .ins-count { font-size:11px; color:var(--mute); border:1px solid var(--line); border-radius:999px; padding:1px 7px; }
+  .ins-hint { margin:-4px 16px 4px; }
+  .ins-group .insights { margin:8px 12px 12px; }
   /* --- trends series toggles --- */
   .series { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 8px; }
   .series button { font:inherit; font-size:12px; border:1px solid var(--line); background:var(--card); color:var(--mute); border-radius:999px; padding:4px 10px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }

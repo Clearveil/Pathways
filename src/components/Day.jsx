@@ -64,6 +64,8 @@ export default function Day({ data, save, date, setDate }) {
   const [newWo, setNewWo] = useState({ workout: "", details: "" });
   const [woMode, setWoMode] = useState(""); // "" | "index" | "new"
   const [woPick, setWoPick] = useState("");
+  const [editingWo, setEditingWo] = useState(null);   // id of the one-off activity being edited
+  const [editingRx, setEditingRx] = useState(null);   // id of the routine one-off being edited
   const [addingRoutine, setAddingRoutine] = useState(false);
   const blankRoutine = { mode: "", pick: "", name: "", kind: "supplement", amount: "", unit: "mg" };
   const [newRoutine, setNewRoutine] = useState(blankRoutine);
@@ -151,9 +153,13 @@ export default function Day({ data, save, date, setDate }) {
   const saveAct = (next) => saveEntry(withAutoLevel(next, data.interventions));
   const addWo = () => {
     if (!newWo.workout.trim()) return;
-    saveAct({ ...f, date, extraWorkouts: [...(f.extraWorkouts || []), { id: uid(), workout: newWo.workout.trim(), details: newWo.details.trim(), intensity: newWo.intensity || "" }] });
-    setNewWo({ workout: "", details: "", intensity: "" }); setAddingWo(false);
+    const item = { workout: newWo.workout.trim(), details: newWo.details.trim(), intensity: newWo.intensity || "" };
+    saveAct({ ...f, date, extraWorkouts: editingWo
+      ? (f.extraWorkouts || []).map((x) => x.id === editingWo ? { ...x, ...item } : x)
+      : [...(f.extraWorkouts || []), { id: uid(), ...item }] });
+    setNewWo({ workout: "", details: "", intensity: "" }); setAddingWo(false); setEditingWo(null);
   };
+  const editWo = (x) => { setNewWo({ workout: x.workout, details: x.details || "", intensity: x.intensity || "" }); setEditingWo(x.id); setWoMode("new"); setAddingWo(true); };
   const removeWo = (id) => saveAct({ ...f, date, extraWorkouts: (f.extraWorkouts || []).filter((x) => x.id !== id) });
 
   // ---- Routine and activities -------------------------------------------
@@ -221,7 +227,7 @@ export default function Day({ data, save, date, setDate }) {
   // Activity card: + Add picks an Index activity not scheduled today, or
   // logs a one-off. Repeat offers both, activities only.
   const pickWo = () => { const i = data.interventions.find((x) => x.id === woPick); if (i) addFromIndex(i); closeWo(); };
-  const closeWo = () => { setAddingWo(false); setWoMode(""); setWoPick(""); setNewWo({ workout: "", details: "" }); };
+  const closeWo = () => { setAddingWo(false); setWoMode(""); setWoPick(""); setEditingWo(null); setNewWo({ workout: "", details: "" }); };
   const woRepeat = [
     ...notTodayActs.map((i) => ({ key: "i" + i.id, label: i.name, detail: [i.doseNote, i.intensity, "not scheduled today"].filter(Boolean).join(" · "), onPick: () => addFromIndex(i) })),
     ...recent(data.entries, date, (e) => e.extraWorkouts, (x) => `${x.workout.toLowerCase()}|${(x.details || "").toLowerCase()}`, 8, 120)
@@ -239,10 +245,16 @@ export default function Day({ data, save, date, setDate }) {
   const submitRoutine = () => {
     const n = newRoutine;
     if (n.mode === "index") { const i = data.interventions.find((x) => x.id === n.pick); if (!i) return; addFromIndex(i); }
-    else if (n.mode === "new" && n.name.trim()) { const noAmt = n.amount === ""; putRoutineExtra({ name: n.name.trim(), kind: n.kind, amount: noAmt ? null : Number(n.amount), unit: noAmt ? "" : n.unit }); }
+    else if (n.mode === "new" && n.name.trim()) {
+      const noAmt = n.amount === "";
+      const item = { name: n.name.trim(), kind: n.kind, amount: noAmt ? null : Number(n.amount), unit: noAmt ? "" : n.unit };
+      if (editingRx) saveEntry({ ...f, date, routineExtras: (f.routineExtras || []).map((x) => x.id === editingRx ? { ...x, ...item } : x) });
+      else putRoutineExtra(item);
+    }
     else return;
-    setNewRoutine(blankRoutine); setAddingRoutine(false);
+    setNewRoutine(blankRoutine); setAddingRoutine(false); setEditingRx(null);
   };
+  const editRx = (x) => { setNewRoutine({ ...blankRoutine, mode: "new", name: x.name, kind: x.kind === "activity" ? "treatment" : x.kind, amount: x.amount ?? "", unit: x.unit || "" }); setEditingRx(x.id); setAddingRoutine(true); };
   const bumpRoutineExtra = (id, delta) => saveEntry({ ...f, date, routineExtras: (f.routineExtras || []).map((x) => x.id === id ? { ...x, qty: Math.max(1, (x.qty || 1) + delta) } : x) });
   const removeRoutineExtra = (id) => saveEntry({ ...f, date, routineExtras: (f.routineExtras || []).filter((x) => x.id !== id) });
   const routineRepeat = [
@@ -432,9 +444,9 @@ export default function Day({ data, save, date, setDate }) {
                 </li>); })}
             </ul>}
             {(f.extraWorkouts || []).length > 0 && <ul className="list" style={{ marginTop: 8 }}>
-              {f.extraWorkouts.map((x) => <li key={x.id}>
+              {f.extraWorkouts.map((x) => <li key={x.id} className={editingWo === x.id ? "editing" : ""}>
                 <span style={{ flex: 1 }}>{x.workout}{[x.details, x.intensity].filter(Boolean).length ? <span className="muted"> · {[x.details, x.intensity].filter(Boolean).join(" · ")}</span> : null}</span>
-                <span className="muted" style={{ fontSize: 12 }}>one-off</span>
+                <button className="ht-link" style={{ padding: "0 6px", fontSize: 12 }} onClick={() => editWo(x)}>Edit</button>
                 <button className="ht-link" style={{ padding: "0 4px", fontSize: 13, lineHeight: 1 }} onClick={() => removeWo(x.id)} title="Remove">×</button>
               </li>)}
             </ul>}
@@ -458,7 +470,7 @@ export default function Day({ data, save, date, setDate }) {
                   <div className="ht-field">Details<input value={newWo.details} onChange={(e) => setNewWo({ ...newWo, details: e.target.value })} placeholder="25 min, easy" onKeyDown={(e) => e.key === "Enter" && (addWo(), closeWo())} /></div>
                   <div className="ht-field">How hard<select value={newWo.intensity || ""} onChange={(e) => setNewWo({ ...newWo, intensity: e.target.value })}><option value="">—</option>{INTENSITY.map((x) => <option key={x} value={x}>{x}</option>)}</select></div>
                 </div>
-                <button className="btn sm" onClick={() => { addWo(); closeWo(); }} disabled={!newWo.workout.trim()} style={{ marginBottom: 10 }}>Log it</button>
+                <button className="btn sm" onClick={() => { addWo(); closeWo(); }} disabled={!newWo.workout.trim()} style={{ marginBottom: 10 }}>{editingWo ? "Save changes" : "Log it"}</button>
               </>}
             </div>}
             <div className="ht-row" style={{ marginTop: 12 }}>
@@ -478,7 +490,7 @@ export default function Day({ data, save, date, setDate }) {
               <h3>Today's routine</h3>
               {routine.length > 0 && <span className="hint">{doneCount} of {routine.length}</span>}
               {!addingRoutine && <Repeat items={routineRepeat} />}
-              <button className="btn ghost sm" onClick={() => { setAddingRoutine(!addingRoutine); setNewRoutine(blankRoutine); }}>{addingRoutine ? "Cancel" : "+ Add"}</button>
+              <button className="btn ghost sm" onClick={() => { setAddingRoutine(!addingRoutine); setNewRoutine(blankRoutine); setEditingRx(null); }}>{addingRoutine ? "Cancel" : "+ Add"}</button>
             </div>
             {addingRoutine && <div className="inline-add">
               {newRoutine.mode === "" && <div className="choice">
@@ -502,7 +514,7 @@ export default function Day({ data, save, date, setDate }) {
                 </div>
               </div>}
               {newRoutine.mode && <>
-                <button className="btn sm" onClick={submitRoutine} disabled={newRoutine.mode === "index" ? !newRoutine.pick : !newRoutine.name.trim()} style={{ marginBottom: 10 }}>Add to today</button>
+                <button className="btn sm" onClick={submitRoutine} disabled={newRoutine.mode === "index" ? !newRoutine.pick : !newRoutine.name.trim()} style={{ marginBottom: 10 }}>{editingRx ? "Save changes" : "Add to today"}</button>
                 <p className="hint" style={{ margin: "-4px 0 8px" }}>Only today changes. To make it a regular thing, add it in the Index with a schedule.</p>
               </>}
             </div>}
@@ -515,13 +527,14 @@ export default function Day({ data, save, date, setDate }) {
             {(f.routineExtras || []).length > 0 && <>
               {routineShown.length > 0 && <div className="rgroup-head">Just today</div>}
               <ul className="list" style={{ marginTop: 4 }}>
-                {f.routineExtras.map((x) => <li key={x.id}>
+                {f.routineExtras.map((x) => <li key={x.id} className={editingRx === x.id ? "editing" : ""}>
                   <span style={{ flex: 1 }}>{x.name}<span className="muted"> · {SINGULAR[x.kind] || x.kind}{x.amount != null ? ` · ${fmtAmt(x.amount)} ${unitFor(x.amount, x.unit)}` : ""}</span></span>
                   <span className="dose-ctl" title="How many times">
                     <button type="button" onClick={() => bumpRoutineExtra(x.id, -1)} disabled={(x.qty || 1) <= 1} aria-label="One fewer">−</button>
                     <span className="amt" style={{ minWidth: 28 }}>×{x.qty || 1}</span>
                     <button type="button" onClick={() => bumpRoutineExtra(x.id, 1)} aria-label="One more">+</button>
                   </span>
+                  <button className="ht-link" style={{ padding: "0 6px", fontSize: 12 }} onClick={() => editRx(x)}>Edit</button>
                   <button className="ht-link" style={{ padding: "0 4px", fontSize: 13, lineHeight: 1 }} onClick={() => removeRoutineExtra(x.id)} title="Remove">×</button>
                 </li>)}
               </ul>

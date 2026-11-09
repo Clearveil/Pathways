@@ -98,6 +98,13 @@ export const normDate = (d) => {
   return isNaN(p) ? null : iso(p);
 };
 export const logged = (e) => e && e.energy != null;
+// Anything at all recorded for the day (kept for future use). A day counts
+// as "missed" for the routine only once its ratings are filled in, or once
+// something on it has been checked off. A day with nothing is left blank
+// everywhere: never shown as missed, never counted in insights.
+export const touched = (e) => !!e && (logged(e) || e.inflammation != null || e.clarity != null || e.stress != null || !!e.notes?.trim()
+  || (e.taken || []).length > 0 || (e.meals || []).length > 0 || (e.extras || []).length > 0 || (e.drinks || []).length > 0
+  || (e.extraWorkouts || []).length > 0 || (e.routineExtras || []).length > 0 || Object.keys(e.activityStatus || {}).length > 0 || Object.keys(e.woStatus || {}).length > 0);
 export const adherence = (data, e, ds) => {
   const due = activeOn(data, ds).filter((i) => !usesStatus(i));
   if (!due.length) return null;

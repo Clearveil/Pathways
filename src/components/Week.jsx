@@ -1,4 +1,4 @@
-import { today, addDays, mealsOn, logged, adherence, testingOn, fmtShort } from "../lib/utils.js";
+import { today, addDays, mealsOn, logged, touched, adherence, testingOn, fmtShort } from "../lib/utils.js";
 import { Flask } from "./Icons.jsx";
 
 export default function Week({ data, date, setDate, goDay }) {
@@ -25,7 +25,7 @@ export default function Week({ data, date, setDate, goDay }) {
             <button key={ds} className={"cell" + (ds === today() ? " today" : "") + (!logged(e) ? " empty-cell" : "")} onClick={() => goDay(ds)}>
               <span className="date">{fmtShort(ds)}</span>
               {logged(e) ? <span className="energy">{e.energy}<small>/10</small></span> : <span className="hint">{ds > today() ? "" : "Not logged"}</span>}
-              {(() => { const a = adherence(data, e, ds); return a && ds <= today() ? <span className="meta" style={{ color: a.taken === a.due ? "var(--acc-ink)" : a.taken === 0 ? "var(--bad)" : "var(--ink2)" }}>Regimen {a.taken}/{a.due}</span> : null; })()}
+              {(() => { const a = adherence(data, e, ds); return a && (logged(e) || (e?.taken || []).length > 0) ? <span className="meta" style={{ color: a.taken === a.due ? "var(--acc-ink)" : a.taken === 0 ? "var(--bad)" : "var(--ink2)" }}>Regimen {a.taken}/{a.due}</span> : null; })()}
               {e?.inflammation && <span className="meta">Inflammation {e.inflammation}</span>}
               {e?.clarity && <span className="meta">Clarity {e.clarity}</span>}
               {e?.stress && <span className="meta">Stress {e.stress}</span>}
@@ -33,7 +33,7 @@ export default function Week({ data, date, setDate, goDay }) {
               {e?.flare && <span className="meta flare">Flare · {e.severity}/5</span>}
               {e?.activity && <span className="meta">{e.activity[0].toUpperCase() + e.activity.slice(1)}{e.activityNote ? ` · ${e.activityNote}` : ""}</span>}
               {testingOn(data, ds) && <span className="meta" style={{ color: "var(--acc-ink)" }}><Flask size={11} /> Testing {testingOn(data, ds)}</span>}
-              {(() => { const mo = mealsOn(data, e, ds); return mo && ds <= today() ? <span className="meta" style={{ color: mo.eaten === mo.planned ? "var(--acc-ink)" : undefined }}>Meals {mo.eaten}/{mo.planned}</span> : mo ? <span className="meta">{mo.planned} meals planned</span> : null; })()}
+              {(() => { const mo = mealsOn(data, e, ds); return mo && (logged(e) || (e?.meals || []).length > 0) ? <span className="meta" style={{ color: mo.eaten === mo.planned ? "var(--acc-ink)" : undefined }}>Meals {mo.eaten}/{mo.planned}</span> : mo ? <span className="meta">{mo.planned} meals planned</span> : null; })()}
               {(e?.extras || []).length > 0 && <span className="meta">+{e.extras.length} unplanned</span>}
               {e?.notes && <span className="meta" style={{ color: "var(--mute)" }}>{e.notes.split("\n")[0].slice(0, 48)}{e.notes.length > 48 ? "…" : ""}</span>}
             </button>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { iso, today, mealsOn, logged, adherence, testingOn, fmtShort } from "../lib/utils.js";
+import { iso, today, mealsOn, logged, touched, adherence, testingOn, fmtShort } from "../lib/utils.js";
 import { useNarrow } from "../lib/useNarrow.js";
 import PlanImport from "./PlanImport.jsx";
 import { Upload, Trash, Flask } from "./Icons.jsx";
@@ -12,11 +12,11 @@ function DayBits({ data, e, ds }) {
   const t = testingOn(data, ds);
   return (
     <>
-      {a && ds <= today() ? <span className="m" style={{ color: a.taken === a.due ? "var(--acc-ink)" : a.taken === 0 ? "var(--bad)" : undefined }}>{a.taken}/{a.due} taken</span> : null}
+      {a && (logged(e) || (e?.taken || []).length > 0) ? <span className="m" style={{ color: a.taken === a.due ? "var(--acc-ink)" : a.taken === 0 ? "var(--bad)" : undefined }}>{a.taken}/{a.due} taken</span> : null}
       {e?.flare && <span className="f">flare {e.severity}</span>}
       {e?.activity && e.activity !== "rest" && <span className="m">{e.activity}</span>}
       {t && <span className="m" style={{ color: "var(--acc-ink)" }}><Flask size={11} /> {t}</span>}
-      {mo && ds <= today() ? <span className="m" style={{ color: mo.eaten === mo.planned ? "var(--acc-ink)" : undefined }}>{mo.eaten}/{mo.planned} meals</span> : mo ? <span className="m">{mo.planned} planned</span> : null}
+      {mo && (logged(e) || (e?.meals || []).length > 0) ? <span className="m" style={{ color: mo.eaten === mo.planned ? "var(--acc-ink)" : undefined }}>{mo.eaten}/{mo.planned} meals</span> : mo ? <span className="m">{mo.planned} planned</span> : null}
       {(e?.extras || []).length > 0 && <span className="m">+{e.extras.length}</span>}
     </>
   );
