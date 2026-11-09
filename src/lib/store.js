@@ -138,8 +138,17 @@ const supabaseStore = {
   // The signed-in person's profile row: plan and the like.
   async profile() {
     const userId = await requireUser();
-    const { data } = await supabase.from("profiles").select("plan").eq("id", userId).maybeSingle();
+    const { data } = await supabase.from("profiles").select("plan, phone, marketing_texts").eq("id", userId).maybeSingle();
     return data || { plan: "free" };
+  },
+
+  // Only phone and texting consent can be changed from the browser; the
+  // database refuses anything else on profiles.
+  async updateProfile(patch) {
+    const userId = await requireUser();
+    const { error } = await supabase.from("profiles").update(patch).eq("id", userId);
+    if (error) throw new Error(error.message);
+    return true;
   },
 
   // Theme and the like belong to the device, not the account.

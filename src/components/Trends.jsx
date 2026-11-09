@@ -3,19 +3,22 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ReferenceArea, ResponsiveContai
 import { today, addDays, logged } from "../lib/utils.js";
 import { buildInsights, GROUPS } from "../lib/insights.js";
 
-// Trends: one small chart per measure, stacked on a shared time axis, so
-// each line can be read on its own instead of four overlapping in grey.
+// Trends: all four measures on one chart by default, each toggled by its
+// tile (the tiles are the legend, and show the range average and change).
+// "Separate" stacks one small chart per measure for reading one at a time.
 // The range row above scopes every chart and every average below it.
 // Insights further down always use all history — a 3-day window is too
 // small to compare anything honestly.
 
-const RANGES = [["3D", 3], ["1W", 7], ["1M", 30], ["3M", 91], ["1Y", 365], ["2Y", 730], ["All", "all"], ["Custom", "custom"]];
+const RANGES = [["3D", 3], ["1W", 7], ["1M", 30], ["3M", 91], ["6M", 182], ["1Y", 365], ["2Y", 730], ["All", "all"], ["Custom", "custom"]];
 const MEASURES = [
-  { key: "energy", label: "Energy", higherBetter: true },
-  { key: "inflammation", label: "Inflammation", higherBetter: false },
-  { key: "clarity", label: "Mental clarity", higherBetter: true },
-  { key: "stress", label: "Stress", higherBetter: false },
+  { key: "energy", label: "Energy", higherBetter: true, tone: "ink", width: 2.25, dash: undefined, opacity: 1 },
+  { key: "inflammation", label: "Inflammation", higherBetter: false, tone: "mute", width: 1.75, dash: "5 3", opacity: 1 },
+  { key: "clarity", label: "Mental clarity", higherBetter: true, tone: "ink", width: 1.75, dash: "1 3", opacity: 0.6 },
+  { key: "stress", label: "Stress", higherBetter: false, tone: "mute", width: 1.75, dash: "9 3 2 3", opacity: 1 },
 ];
+const readPref = (k, d) => { try { return localStorage.getItem("pathways:trends:" + k) || d; } catch (e) { return d; } };
+const writePref = (k, v) => { try { localStorage.setItem("pathways:trends:" + k, v); } catch (e) {} };
 const dayDiff = (a, b) => Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 864e5);
 const mondayOf = (ds) => { const d = new Date(ds + "T12:00:00"); return addDays(ds, -((d.getDay() + 6) % 7)); };
 const mean = (xs) => { const v = xs.filter((x) => x != null); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
@@ -27,6 +30,10 @@ export default function Trends({ data, dark }) {
   const [range, setRange] = useState("1M");
   const [custom, setCustom] = useState({ from: addDays(today(), -29), to: today() });
   const [open, setOpen] = useState({ macro: true, micro: true });
+  const [view, setViewState] = useState(() => readPref("view", "combined"));
+  const setView = (v) => { setViewState(v); writePref("view", v); };
+  const [hidden, setHidden] = useState({});
+  const toggle = (k) => setHidden((h) => ({ ...h, [k]: !h[k] }));
 
   // ---- the window being shown, and the same-length window before it
   const days = RANGES.find(([k]) => k === range)?.[1];
@@ -64,7 +71,7 @@ export default function Trends({ data, dark }) {
     return dt.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
   };
   const tipLabel = (d) => weekly ? `Week of ${new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-  const priorLabel = range === "All" ? null : range === "Custom" ? `previous ${len} days` : `previous ${{ "3D": "3 days", "1W": "week", "1M": "30 days", "3M": "3 months", "1Y": "year", "2Y": "2 years" }[range]}`;
+  const priorLabel = range === "All" ? null : range === "Custom" ? `previous ${len} days` : `previous ${{ "3D": "3 days", "1W": "week", "1M": "30 days", "3M": "3 months", "6M": "6 months", "1Y": "year", "2Y": "2 years" }[range]}`;
 
   const insights = useMemo(() => buildInsights(data), [data]);
   const grouped = GROUPS.map((g) => ({ ...g, items: insights.filter((x) => x.group === g.key) })).filter((g) => g.items.length);
@@ -83,44 +90,83 @@ export default function Trends({ data, dark }) {
 
       {inWin.length === 0 ? <div className="card"><p className="empty">No days logged in this range.{entries.length ? " Try a longer one." : " Two or more logged days and the charts show up here."}</p></div> : (
         <div className="card trends-card">
-          <p className="hint" style={{ marginTop: 0 }}>
-            {inWin.length} logged day{inWin.length === 1 ? "" : "s"} in this range{weekly ? " · lines show weekly averages" : " · blank stretches are days with nothing logged"}. Shaded bands are tests{present[0]?.key === "energy" ? "; red dots on Energy are flare days" : ""}.
-          </p>
-          {present.map((m, idx) => {
-            const a = mean(inWin.map((e) => e[m.key])), p = mean(inPrev.map((e) => e[m.key]));
-            const d = a != null && p != null ? a - p : null;
-            const better = d != null && Math.abs(d) >= 0.05 ? (m.higherBetter ? d > 0 : d < 0) : null;
-            const last = idx === present.length - 1;
-            return (
+          <div className="tiles" role="group" aria-label="Measures shown">
+            {present.map((m) => {
+              const a = mean(inWin.map((e) => e[m.key])), p = mean(inPrev.map((e) => e[m.key]));
+              const d = a != null && p != null ? a - p : null;
+              const better = d != null && Math.abs(d) >= 0.05 ? (m.higherBetter ? d > 0 : d < 0) : null;
+              const off = !!hidden[m.key];
+              return (
+                <button key={m.key} type="button" className={"tile" + (off ? " off" : "")} aria-pressed={!off} onClick={() => toggle(m.key)} title={off ? `Show ${m.label}` : `Hide ${m.label}`}>
+                  <span className="tile-top">
+                    <svg width="22" height="8" aria-hidden="true"><line x1="1" y1="4" x2="21" y2="4" stroke={c[m.tone]} strokeOpacity={m.opacity} strokeWidth={m.width + 0.5} strokeDasharray={m.dash} strokeLinecap="round" /></svg>
+                    {m.label}
+                  </span>
+                  <span className="tile-avg">{a != null ? a.toFixed(1) : "—"}<small> avg</small></span>
+                  {priorLabel && <span className="tile-delta">{d == null ? "no earlier data" : Math.abs(d) < 0.05 ? "no change" : `${d > 0 ? "▲" : "▼"} ${Math.abs(d).toFixed(1)} · ${better ? "better" : "worse"}`}</span>}
+                </button>
+              );
+            })}
+          </div>
+          <div className="view-row">
+            <span className="hint">
+              {inWin.length} logged day{inWin.length === 1 ? "" : "s"}{priorLabel ? ` · changes vs the ${priorLabel}` : ""}{weekly ? " · weekly averages" : ""}. Tap a measure to show or hide it. Shaded bands are tests{present.some((m) => m.key === "energy") ? "; red dots are flare days" : ""}.
+            </span>
+            <div className="seg" role="group" aria-label="Chart layout">
+              <button type="button" className={view === "combined" ? "on" : ""} onClick={() => setView("combined")} aria-pressed={view === "combined"}>One chart</button>
+              <button type="button" className={view === "separate" ? "on" : ""} onClick={() => setView("separate")} aria-pressed={view === "separate"}>Separate</button>
+            </div>
+          </div>
+          {(() => {
+            const shown = present.filter((m) => !hidden[m.key]);
+            if (!shown.length) return <p className="empty">Every measure is hidden — tap one above to show it.</p>;
+            const flareDot = (pp) => {
+              const fl = weekly ? pp.payload.flareDays : pp.payload.flare;
+              if (pp.value == null) return <g key={pp.payload.date} />;
+              if (fl) return <circle key={pp.payload.date} cx={pp.cx} cy={pp.cy} r={weekly ? 3 + Math.min(fl, 4) : 3 + fl} fill={c.bad} stroke={c.card} strokeWidth={1.5} />;
+              return len <= 31 ? <circle key={pp.payload.date} cx={pp.cx} cy={pp.cy} r={2.5} fill={c.ink} /> : <g key={pp.payload.date} />;
+            };
+            const lineFor = (m) => (
+              <Line key={m.key} type="monotone" dataKey={m.key} name={m.label} stroke={c[m.tone]} strokeOpacity={m.opacity} strokeWidth={m.width} strokeDasharray={m.dash} strokeLinecap="round"
+                isAnimationActive={false} connectNulls={weekly}
+                dot={m.key === "energy" ? flareDot : (len <= 31 && view === "separate" ? { r: 2.5, fill: c.ink, strokeWidth: 0 } : false)}
+                activeDot={{ r: 4, fill: c[m.tone], stroke: c.card, strokeWidth: 2 }} />
+            );
+            const tip = <Tooltip labelFormatter={tipLabel} formatter={(v, name) => [v == null ? "—" : Number(v).toFixed(weekly ? 1 : 0), name]}
+              contentStyle={{ borderRadius: 10, border: `1px solid ${c.line}`, background: c.card, color: c.ink, fontSize: 12 }} cursor={{ stroke: c.mute, strokeDasharray: "3 3" }} />;
+            const bands = (labels) => windows.map((w) => <ReferenceArea key={w.id} x1={w.x1} x2={w.x2} fill={c.band} fillOpacity={dark ? 0.16 : 0.07} label={labels ? { value: w.name, position: "insideTopLeft", fontSize: 10, fill: c.mute } : undefined} />);
+            if (view === "combined") return (
+              <div style={{ height: 300, fontSize: 11 }}>
+                <ResponsiveContainer>
+                  <LineChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={c.grid} vertical={false} />
+                    <XAxis dataKey="date" tickFormatter={tickFmt} stroke={c.mute} tickLine={false} axisLine={false} minTickGap={24} />
+                    <YAxis domain={[0, 10]} ticks={[0, 2, 4, 6, 8, 10]} stroke={c.mute} tickLine={false} axisLine={false} width={22} />
+                    {tip}
+                    {bands(true)}
+                    {shown.map(lineFor)}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            );
+            return shown.map((m, idx) => (
               <div key={m.key} className="spark">
-                <div className="spark-head">
-                  <span className="spark-label">{m.label}</span>
-                  <span className="spark-avg">{a != null ? a.toFixed(1) : "—"}<small> avg</small></span>
-                  {priorLabel && <span className="spark-delta">{d == null ? `no data for the ${priorLabel}` : Math.abs(d) < 0.05 ? `same as the ${priorLabel}` : `${d > 0 ? "▲" : "▼"} ${Math.abs(d).toFixed(1)} vs ${priorLabel} · ${better ? "better" : "worse"}`}</span>}
-                </div>
-                <div style={{ height: last ? 118 : 96, fontSize: 11 }}>
+                <div className="spark-head"><span className="spark-label">{m.label}</span></div>
+                <div style={{ height: idx === shown.length - 1 ? 118 : 96, fontSize: 11 }}>
                   <ResponsiveContainer>
                     <LineChart data={rows} syncId="trends" margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
                       <CartesianGrid stroke={c.grid} vertical={false} />
-                      <XAxis dataKey="date" hide={!last} tickFormatter={tickFmt} stroke={c.mute} tickLine={false} axisLine={false} minTickGap={24} />
+                      <XAxis dataKey="date" hide={idx !== shown.length - 1} tickFormatter={tickFmt} stroke={c.mute} tickLine={false} axisLine={false} minTickGap={24} />
                       <YAxis domain={[0, 10]} ticks={[0, 5, 10]} stroke={c.mute} tickLine={false} axisLine={false} width={22} />
-                      <Tooltip labelFormatter={tipLabel} formatter={(v) => [v == null ? "—" : Number(v).toFixed(weekly ? 1 : 0), m.label]}
-                        contentStyle={{ borderRadius: 10, border: `1px solid ${c.line}`, background: c.card, color: c.ink, fontSize: 12 }} cursor={{ stroke: c.mute, strokeDasharray: "3 3" }} />
-                      {windows.map((w) => <ReferenceArea key={w.id} x1={w.x1} x2={w.x2} fill={c.band} fillOpacity={dark ? 0.16 : 0.07} label={idx === 0 ? { value: w.name, position: "insideTopLeft", fontSize: 10, fill: c.mute } : undefined} />)}
-                      <Line type="monotone" dataKey={m.key} stroke={c.ink} strokeWidth={2} isAnimationActive={false} connectNulls={weekly}
-                        dot={m.key === "energy" ? (pp) => {
-                          const fl = weekly ? pp.payload.flareDays : pp.payload.flare;
-                          if (pp.value == null) return <g key={pp.payload.date} />;
-                          if (fl) return <circle key={pp.payload.date} cx={pp.cx} cy={pp.cy} r={weekly ? 3 + Math.min(fl, 4) : 3 + fl} fill={c.bad} stroke={c.card} strokeWidth={1.5} />;
-                          return len <= 31 ? <circle key={pp.payload.date} cx={pp.cx} cy={pp.cy} r={2.5} fill={c.ink} /> : <g key={pp.payload.date} />;
-                        } : len <= 31 ? { r: 2.5, fill: c.ink, strokeWidth: 0 } : false}
-                        activeDot={{ r: 4, fill: c.ink, stroke: c.card, strokeWidth: 2 }} />
+                      {tip}
+                      {bands(idx === 0)}
+                      {lineFor(m)}
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
               </div>
-            );
-          })}
+            ));
+          })()}
         </div>
       )}
 

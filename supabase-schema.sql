@@ -305,3 +305,34 @@ alter table public.interventions
 -- activity marked done; false when picked by hand.
 alter table public.entries
   add column activity_auto boolean not null default false;
+
+-- ---------------------------------------------------------------------------
+-- Migration `profile_phone_and_consent` (2026-11-09).
+-- ---------------------------------------------------------------------------
+-- Optional phone, and a separate opt-in for marketing texts with the time
+-- consent was given (TCPA: keep proof).
+alter table public.profiles
+  add column phone text,
+  add column marketing_texts boolean not null default false,
+  add column marketing_consent_at timestamptz;
+
+-- New accounts copy phone + consent from signup metadata.
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer
+set search_path = public
+as $$
+declare
+  ph text := nullif(trim(new.raw_user_meta_data->>'phone'), '');
+  mk boolean := coalesce((new.raw_user_meta_data->>'marketing_texts')::boolean, false) and ph is not null;
+begin
+  insert into public.profiles (id, email, phone, marketing_texts, marketing_consent_at)
+  values (new.id, new.email, ph, mk, case when mk then now() else null end);
+  return new;
+end $$;
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+
+-- Signed-in users may change only phone and texting consent. plan can't be
+-- changed from the browser, so a paywall can trust it.
+revoke update on public.profiles from authenticated, anon;
+grant update (phone, marketing_texts, marketing_consent_at) on public.profiles to authenticated;
+revoke insert, delete on public.profiles from authenticated, anon;

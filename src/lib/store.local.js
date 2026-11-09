@@ -12,7 +12,8 @@ export const localStore = {
     localStorage.setItem(KEY, JSON.stringify(data));
     return true;
   },
-  async profile() { return { plan: "free" }; },
+  async profile() { try { return JSON.parse(localStorage.getItem(`${KEY}:profile`)) || { plan: "free" }; } catch (e) { return { plan: "free" }; } },
+  async updateProfile(patch) { const cur = await this.profile(); localStorage.setItem(`${KEY}:profile`, JSON.stringify({ ...cur, ...patch })); return true; },
   async pref(k, v) {
     if (v === undefined) return localStorage.getItem(`${KEY}:${k}`);
     localStorage.setItem(`${KEY}:${k}`, v);

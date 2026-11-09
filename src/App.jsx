@@ -11,6 +11,7 @@ import Library from "./components/Library.jsx";
 import Trends from "./components/Trends.jsx";
 import Menu from "./components/Menu.jsx";
 import Modal from "./components/Modal.jsx";
+import { normalizePhone, formatPhone, MARKETING_CONSENT } from "./lib/phone.js";
 import PlanImport from "./components/PlanImport.jsx";
 import { Share, Sun, Moon, User, CloudCheck, CloudOff, Check, Drive, Upload, Download, Flask } from "./components/Icons.jsx";
 
@@ -43,6 +44,8 @@ function HealthTracker({ session }) {
   const [storageOk, setStorageOk] = useState(null);
   const [plan, setPlan] = useState("free");
   const [showPlan, setShowPlan] = useState(false);
+  const [profile, setProfile] = useState({});                 // phone, marketing_texts
+  const [contact, setContact] = useState(null);               // open "Phone & texts" form state
   const [planImport, setPlanImport] = useState(false);
   const [dataModal, setDataModal] = useState(false);
 
@@ -70,7 +73,7 @@ function HealthTracker({ session }) {
     (async () => {
       try { if ((await store.pref("theme")) === "dark") setDark(true); } catch (e) {}
       await refresh(true);
-      try { const p = await store.profile(); if (p?.plan) setPlan(p.plan); } catch (e) {}
+      try { const p = await store.profile(); if (p?.plan) setPlan(p.plan); setProfile(p || {}); } catch (e) {}
       setLoaded(true);
     })();
     // A home-screen app is often resumed, not reopened, so the first load
@@ -139,6 +142,18 @@ function HealthTracker({ session }) {
   const pickImport = () => importRef.current.click();
   const goDay = (d) => { setDate(d); setView("day"); };
   const toggleTheme = async () => { const n = !dark; setDark(n); try { await store.pref("theme", n ? "dark" : "light"); } catch (e) {} };
+  // Phone & texts: optional number, and a separate opt-in for marketing
+  // texts. Consent time is recorded when it's turned on, cleared when off.
+  const openContact = () => setContact({ phone: formatPhone(profile.phone), texts: !!profile.marketing_texts, err: "" });
+  const saveContact = async () => {
+    const ph = normalizePhone(contact.phone);
+    if (!ph.ok) return setContact({ ...contact, err: "That phone number doesn't look right. Use 10 digits, or include the country code with a +." });
+    const texts = !!(ph.value && contact.texts);
+    const patch = { phone: ph.value, marketing_texts: texts };
+    if (texts !== !!profile.marketing_texts) patch.marketing_consent_at = texts ? new Date().toISOString() : null;
+    try { await store.updateProfile(patch); setProfile({ ...profile, ...patch }); setContact(null); setMsg("Saved"); setTimeout(() => setMsg(""), 1200); }
+    catch (e) { setContact({ ...contact, err: e.message || "Couldn't save." }); }
+  };
   const signOut = () => { if (supabase) supabase.auth.signOut(); };
 
   if (!loaded) return <div className="ht" style={{ padding: 30, color: "#8C8C8C" }}>Opening Pathways…</div>;
@@ -174,13 +189,12 @@ function HealthTracker({ session }) {
             <button onClick={pickImport}><Upload /> Restore a backup<small>A .json file exported from Pathways</small></button>
           </Menu>
           <button className="icon-btn" onClick={toggleTheme} title={dark ? "Light mode" : "Dark mode"} aria-label={dark ? "Light mode" : "Dark mode"}>{dark ? <Sun /> : <Moon />}</button>
-          {!LOCAL_ONLY && (
-            <Menu icon={<User />} text="Account" label="Account">
-              <div className="menu-head">{session.user.email}<small>{PLAN_LABEL[plan] || plan} plan</small></div>
-              <button onClick={() => setShowPlan(true)}>View plan</button>
-              <button onClick={signOut}>Sign out</button>
-            </Menu>
-          )}
+          <Menu icon={<User />} text="Account" label="Account">
+            <div className="menu-head">{session.user.email}<small>{PLAN_LABEL[plan] || plan} plan</small></div>
+            <button onClick={openContact}>Phone & texts<small>{profile.phone ? formatPhone(profile.phone) + (profile.marketing_texts ? " · texts on" : "") : "Not added"}</small></button>
+            {!LOCAL_ONLY && <button onClick={() => setShowPlan(true)}>View plan</button>}
+            {!LOCAL_ONLY && <button onClick={signOut}>Sign out</button>}
+          </Menu>
         </div>
       </header>
       {/* Messages float over the page instead of being inserted into it, so
@@ -212,6 +226,22 @@ function HealthTracker({ session }) {
               <p className="hint">Bring in a Pathways backup: from another device, another account, or an older export. Days are matched by date and the newer version of each wins, so nothing you've logged since is lost.</p>
               <button className="btn" onClick={() => { setDataModal(false); pickImport(); }}>Choose backup file</button>
             </div>
+          </div>
+        </Modal>
+      )}
+      {contact && (
+        <Modal title="Phone & texts" onClose={() => setContact(null)}>
+          <label className="ht-field">Phone <span className="hint" style={{ marginTop: -4 }}>Optional. Used only to reach you about your account unless you tick the box below.</span>
+            <input type="tel" autoComplete="tel" inputMode="tel" value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value, err: "" })} placeholder="(555) 123-4567" />
+          </label>
+          <label className={"consent" + (contact.phone.trim() ? "" : " disabled")}>
+            <input type="checkbox" checked={contact.texts && !!contact.phone.trim()} disabled={!contact.phone.trim()} onChange={(e) => setContact({ ...contact, texts: e.target.checked })} />
+            <span>{MARKETING_CONSENT}</span>
+          </label>
+          {contact.err && <p className="warn">{contact.err}</p>}
+          <div className="day-actions">
+            <button className="btn" onClick={saveContact}>Save</button>
+            {profile.phone && <button className="ht-link" onClick={() => setContact({ ...contact, phone: "", texts: false })}>Remove number</button>}
           </div>
         </Modal>
       )}
