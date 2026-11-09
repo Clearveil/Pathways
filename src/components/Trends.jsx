@@ -65,7 +65,7 @@ export default function Trends({ data, dark }) {
   // Starts and stops inside the range, drawn as thin dotted lines. On
   // weekly views they snap to the week they fall in.
   const marks = changesOf(data).filter((ch) => ch.date >= from && ch.date <= to)
-    .map((ch) => ({ x: weekly ? mondayOf(ch.date) : ch.date, label: ch.items.length === 1 ? `${ch.items[0].verb === "Started" ? "+" : "−"} ${ch.items[0].name}` : `${ch.items.length} changes`, title: ch.items.map((x) => `${x.verb} ${x.name}`).join(", ") }));
+    .map((ch) => ({ x: weekly ? mondayOf(ch.date) : ch.date, label: ch.items.length === 1 ? `${ch.items[0].verb === "Started" ? "+" : ch.items[0].verb === "Stopped" ? "−" : "~"} ${ch.items[0].name}` : `${ch.items.length} changes`, title: ch.items.map((x) => `${x.verb} ${x.name}`).join(", ") }));
   const windows = data.interventions.filter((i) => i.start && i.status !== "baseline").map((i) => ({ ...i, end: i.end || today() }))
     .filter((w) => w.start <= to && w.end >= from).map((w) => ({ ...w, x1: weekly ? mondayOf(w.start < from ? from : w.start) : (w.start < from ? from : w.start), x2: weekly ? mondayOf(w.end > to ? to : w.end) : (w.end > to ? to : w.end) }));
   const tickFmt = (d) => {
@@ -168,7 +168,7 @@ export default function Trends({ data, dark }) {
           </div>
           <div className="view-row">
             <span className="hint">
-              {inWin.length} logged day{inWin.length === 1 ? "" : "s"}{priorLabel ? ` · numbers are range averages, arrows the change vs the ${priorLabel}` : " · numbers are range averages"}{weekly ? " · weekly averages" : ""}. Tap a measure to show or hide it. Shaded bands are tests; dotted lines mark something started (+) or stopped (−){present.some((m) => m.key === "energy") ? "; red dots are flare days" : ""}.
+              {inWin.length} logged day{inWin.length === 1 ? "" : "s"}{priorLabel ? ` · numbers are range averages, arrows the change vs the ${priorLabel}` : " · numbers are range averages"}{weekly ? " · weekly averages" : ""}. Tap a measure to show or hide it. Shaded bands are tests; dotted lines mark something started (+), stopped (−) or a dose change (~){present.some((m) => m.key === "energy") ? "; red dots are flare days" : ""}.
             </span>
             <div className="seg" role="group" aria-label="Chart layout">
               <button type="button" className={view === "combined" ? "on" : ""} onClick={() => setView("combined")} aria-pressed={view === "combined"}>One chart</button>

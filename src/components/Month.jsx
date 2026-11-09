@@ -33,15 +33,16 @@ export default function Month({ data, save, date, setDate, goDay }) {
   const byDate = Object.fromEntries(data.entries.map((e) => [e.date, e]));
   const shift = (n) => setDate(iso(new Date(y, m - 1 + n, 1)));
 
-  const hasMeals = data.meals.length > 0;
-  const hasWo = (data.workouts || []).length > 0;
+  const hasMeals = data.meals.some((m) => m.date >= today());
+  const hasWo = (data.workouts || []).some((w) => w.date >= today());
   const clearPlan = (what) => {
     const next = { ...data };
-    if (what === "meals" || what === "both") next.meals = [];
-    if (what === "workouts" || what === "both") next.workouts = [];
+    // Past days keep their plan, so planned-vs-eaten history stays accurate.
+    if (what === "meals" || what === "both") next.meals = data.meals.filter((m) => m.date < today());
+    if (what === "workouts" || what === "both") next.workouts = (data.workouts || []).filter((w) => w.date < today());
     save(next);
     setMenu(null);
-    setMsg(what === "both" ? "Both plans removed. Your logged days are untouched." : `${what === "meals" ? "Meal" : "Workout"} plan removed. Your logged days are untouched.`);
+    setMsg(`${what === "both" ? "Both plans" : what === "meals" ? "Meal plan" : "Workout plan"} removed from today on. Past days keep their plan so your history stays accurate.`);
   };
 
   return (
@@ -57,9 +58,9 @@ export default function Month({ data, save, date, setDate, goDay }) {
           <div className="menu-wrap">
             <button className="btn ghost xs" onClick={() => setMenu(menu === "clear" ? null : "clear")} disabled={!hasMeals && !hasWo} aria-expanded={menu === "clear"} title="Remove plan"><Trash size={13} /><span className="lbl">Remove plan</span></button>
             {menu === "clear" && <div className="menu">
-              {hasMeals && <button onClick={() => clearPlan("meals")}>Meal plan<small>{data.meals.length} meals · what you logged is kept</small></button>}
-              {hasWo && <button onClick={() => clearPlan("workouts")}>Workout plan<small>{data.workouts.length} workouts · what you logged is kept</small></button>}
-              {hasMeals && hasWo && <button onClick={() => clearPlan("both")}>Both<small>clears every imported plan</small></button>}
+              {hasMeals && <button onClick={() => clearPlan("meals")}>Meal plan<small>{data.meals.filter((m) => m.date >= today()).length} upcoming meals · past days are kept</small></button>}
+              {hasWo && <button onClick={() => clearPlan("workouts")}>Workout plan<small>{data.workouts.filter((w) => w.date >= today()).length} upcoming workouts · past days are kept</small></button>}
+              {hasMeals && hasWo && <button onClick={() => clearPlan("both")}>Both<small>today and future days · past days are kept</small></button>}
               <button className="cancel" onClick={() => setMenu(null)}>Cancel</button>
             </div>}
           </div>

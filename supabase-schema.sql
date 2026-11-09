@@ -336,3 +336,17 @@ revoke execute on function public.handle_new_user() from public, anon, authentic
 revoke update on public.profiles from authenticated, anon;
 grant update (phone, marketing_texts, marketing_consent_at) on public.profiles to authenticated;
 revoke insert, delete on public.profiles from authenticated, anon;
+
+-- ---------------------------------------------------------------------------
+-- Migration `change_log_archive_reports` (2026-11-09).
+-- ---------------------------------------------------------------------------
+-- change_log: append-only history of Index changes and removed days, written
+-- by triggers (security definer). Clients may read their own rows only.
+--   columns: id, user_id, at, tbl, row_id, name, action (added|changed|removed),
+--            field, old_value jsonb, new_value jsonb
+-- interventions.archived_at / foods.archived_at: "Remove" archives instead of
+--   deleting, so history keeps its names.
+-- log_changes(): after insert/update/delete on interventions and foods (per
+--   watched field), after delete on entries (full row kept for restore).
+-- reports: every exported report with full content; read + insert only.
+-- (Full DDL as applied is in the Supabase migration history.)

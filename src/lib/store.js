@@ -47,13 +47,13 @@ const TABLES = {
   },
   foods: {
     table: "foods", order: "name",
-    toRow: (f) => ({ id: f.id, name: f.name, kind: f.kind === "drink" ? "drink" : "food", size: nul(f.size), category: nul(f.category), status: f.status, confidence: f.confidence, last_tested: nul(f.lastTested), updated_at: stamp(f.updatedAt) }),
-    fromRow: (r) => ({ id: r.id, name: r.name, kind: r.kind || "food", size: str(r.size), category: str(r.category), status: r.status, confidence: r.confidence, lastTested: str(r.last_tested), updatedAt: stamp(r.updated_at) }),
+    toRow: (f) => ({ id: f.id, name: f.name, kind: f.kind === "drink" ? "drink" : "food", size: nul(f.size), archived_at: f.archivedAt || null, category: nul(f.category), status: f.status, confidence: f.confidence, last_tested: nul(f.lastTested), updated_at: stamp(f.updatedAt) }),
+    fromRow: (r) => ({ id: r.id, name: r.name, kind: r.kind || "food", size: str(r.size), archivedAt: r.archived_at || "", category: str(r.category), status: r.status, confidence: r.confidence, lastTested: str(r.last_tested), updatedAt: stamp(r.updated_at) }),
   },
   interventions: {
     table: "interventions", order: "start_date",
-    toRow: (i) => ({ id: i.id, name: i.name, type: i.type, dose: nul(doseLabel(i)), dose_amount: i.doseAmount ?? null, dose_unit: nul(i.doseUnit), dose_note: nul(i.doseNote), source: nul(i.source), start_date: nul(i.start), end_date: nul(i.end), status: i.status, outcome: nul(i.outcome), intensity: nul(i.intensity), doses_per_day: i.dosesPerDay || 1, days: i.days?.length && i.days.length < 7 ? i.days : null, times: (i.times || []).filter(Boolean).length ? i.times.filter(Boolean) : null, updated_at: stamp(i.updatedAt) }),
-    fromRow: (r) => ({ id: r.id, name: r.name, type: r.type, dose: str(r.dose), doseAmount: r.dose_amount == null ? null : Number(r.dose_amount), doseUnit: str(r.dose_unit), doseNote: str(r.dose_note), source: str(r.source), start: str(r.start_date), end: str(r.end_date), status: r.status, outcome: str(r.outcome), intensity: str(r.intensity), dosesPerDay: r.doses_per_day || 1, days: r.days?.length ? r.days : null, times: r.times || [], updatedAt: stamp(r.updated_at) }),
+    toRow: (i) => ({ id: i.id, name: i.name, type: i.type, dose: nul(doseLabel(i)), dose_amount: i.doseAmount ?? null, dose_unit: nul(i.doseUnit), dose_note: nul(i.doseNote), source: nul(i.source), start_date: nul(i.start), end_date: nul(i.end), status: i.status, outcome: nul(i.outcome), intensity: nul(i.intensity), archived_at: i.archivedAt || null, doses_per_day: i.dosesPerDay || 1, days: i.days?.length && i.days.length < 7 ? i.days : null, times: (i.times || []).filter(Boolean).length ? i.times.filter(Boolean) : null, updated_at: stamp(i.updatedAt) }),
+    fromRow: (r) => ({ id: r.id, name: r.name, type: r.type, dose: str(r.dose), doseAmount: r.dose_amount == null ? null : Number(r.dose_amount), doseUnit: str(r.dose_unit), doseNote: str(r.dose_note), source: str(r.source), start: str(r.start_date), end: str(r.end_date), status: r.status, outcome: str(r.outcome), intensity: str(r.intensity), archivedAt: r.archived_at || "", dosesPerDay: r.doses_per_day || 1, days: r.days?.length ? r.days : null, times: r.times || [], updatedAt: stamp(r.updated_at) }),
   },
   meals: {
     table: "meal_plan", order: "date",
@@ -103,7 +103,8 @@ async function sync(data) {
       if (error) throw new Error(error.message);
     }
     if (changed.length) {
-      const { error } = await supabase.from(table).upsert(changed.map((r) => ({ user_id: userId, ...toRow(r) })));
+      const opts = table === "entries" ? { onConflict: "user_id,date" } : undefined;
+      const { error } = await supabase.from(table).upsert(changed.map((r) => ({ user_id: userId, ...toRow(r) })), opts);
       if (error) throw new Error(error.message);
     }
     last[key] = next;
@@ -124,6 +125,7 @@ const supabaseStore = {
       out[k] = rows.map(TABLES[k].fromRow);
     });
     const d = migrate(out);
+    d.changes = await this.loadChanges().catch(() => []);
     last = {};
     keys.forEach((k) => { last[k] = new Map(d[k].map((r) => [r.id, sig(r)])); });
     return d;
@@ -133,6 +135,29 @@ const supabaseStore = {
     const run = queue.then(() => sync(data));
     queue = run.catch(() => {}); // a failed save must not block the next one
     return run;
+  },
+
+  // Append-only history of Index changes and removed days, written by the
+  // database. Oldest first.
+  async loadChanges() {
+    const userId = await requireUser();
+    const { data, error } = await supabase.from("change_log").select("at, tbl, row_id, name, action, field, old_value, new_value").eq("user_id", userId).order("at", { ascending: true }).limit(10000);
+    if (error) throw new Error(error.message);
+    return (data || []).map((r) => ({ at: r.at, tbl: r.tbl, rowId: r.row_id, name: r.name, action: r.action, field: r.field, oldValue: r.old_value, newValue: r.new_value }));
+  },
+
+  // Exported reports: kept permanently, with their full content.
+  async listReports() {
+    const userId = await requireUser();
+    const { data, error } = await supabase.from("reports").select("id, created_at, range_from, range_to, title, content").eq("user_id", userId).order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data || []).map((r) => ({ id: r.id, createdAt: r.created_at, from: r.range_from, to: r.range_to, title: r.title, content: r.content }));
+  },
+  async saveReport(r) {
+    const userId = await requireUser();
+    const { error } = await supabase.from("reports").insert({ user_id: userId, id: r.id, range_from: r.from, range_to: r.to, title: r.title, content: r.content });
+    if (error) throw new Error(error.message);
+    return true;
   },
 
   // The signed-in person's profile row: plan and the like.

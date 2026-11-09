@@ -68,7 +68,12 @@ export const INT_STATUS = ["baseline", "testing", "established", "discontinued"]
 export const ACTIVITY = ["rest", "light", "moderate", "hard"];
 // On the routine for a given day: started, not ended, not discontinued, and
 // scheduled for that weekday.
-export const activeOn = (data, ds) => data.interventions.filter((i) => i.start && i.start <= ds && (!i.end || i.end >= ds) && i.status !== "discontinued" && scheduledOn(i, ds));
+export const activeOn = (data, ds) => data.interventions.filter((i) => !i.archivedAt && i.start && i.start <= ds && (!i.end || i.end >= ds) && i.status !== "discontinued" && scheduledOn(i, ds));
+// Archived items are hidden from the routine and the Index list but kept,
+// with their names, so past days and insights still make sense.
+export const live = (xs) => (xs || []).filter((x) => !x.archivedAt);
+// Local calendar date of a database timestamp.
+export const localDate = (at) => iso(new Date(at));
 export const isOn = (i) => !i.end || i.end >= today();
 export const mealKey = (m) => `${m.meal}|${m.items}`;
 export const mealsOn = (data, e, ds) => {
@@ -99,6 +104,31 @@ export const normDate = (d) => {
 };
 export const logged = (e) => e && e.energy != null;
 
+export function testWindows(data) {
+  const out = [];
+  const statusChanges = (data.changes || []).filter((c) => c.action === "changed" && c.field === "status");
+  const byRow = {};
+  statusChanges.forEach((c) => (byRow[c.tbl + ":" + c.rowId] ||= []).push(c));
+  // foods and drinks: only the log knows when a test started and ended
+  data.foods.forEach((f) => {
+    const cs = byRow["foods:" + f.id] || [];
+    let start = null;
+    cs.forEach((c) => {
+      if (c.newValue === "testing") start = localDate(c.at);
+      else if (start && c.oldValue === "testing") { out.push({ id: f.id, name: f.name, kind: f.kind === "drink" ? "drink" : "food", from: start, to: addDays(localDate(c.at), -1), result: c.newValue }); start = null; }
+    });
+    if (f.status === "testing") out.push({ id: f.id, name: f.name, kind: f.kind === "drink" ? "drink" : "food", from: start || f.lastTested || today(), to: today(), result: "ongoing" });
+  });
+  return out;
+}
+// Start of an Index item's test: the last switch to "testing" if logged,
+// otherwise its start date.
+export function testStart(data, i) {
+  const c = (data.changes || []).filter((x) => x.tbl === "interventions" && x.rowId === i.id && x.field === "status" && x.newValue === "testing").pop();
+  const d = c ? localDate(c.at) : null;
+  return d && (!i.start || d > i.start) ? d : i.start;
+}
+
 // Every change to what you take or do: each Index item starting, and
 // stopping (the day after its end date). Grouped by date, because things
 // that change on the same day can't be told apart.
@@ -109,6 +139,10 @@ export function changesOf(data) {
     if (i.start) (by[i.start] ||= []).push({ verb: "Started", name: i.name, kind: KIND[i.type] || i.type, id: i.id, test: i.status === "testing" || i.status === "established" || i.status === "discontinued" });
     if (i.end && i.end < today()) { const d = addDays(i.end, 1); (by[d] ||= []).push({ verb: "Stopped", name: i.name, kind: KIND[i.type] || i.type, id: i.id, test: false }); }
   });
+  // Dose changes, from the change log: a dose change is a change.
+  const units = Object.fromEntries(data.interventions.map((i) => [i.id, i.doseUnit || ""]));
+  (data.changes || []).filter((c) => c.tbl === "interventions" && c.action === "changed" && c.field === "dose_amount" && c.oldValue != null && c.newValue != null)
+    .forEach((c) => { const d = localDate(c.at); const it = data.interventions.find((i) => i.id === c.rowId); (by[d] ||= []).push({ verb: "Dose changed", name: `${c.name} ${c.oldValue}→${c.newValue}${units[c.rowId] ? " " + units[c.rowId] : ""}`, kind: KIND[it?.type] || "supplement", id: c.rowId, test: it?.status === "testing" }); });
   return Object.keys(by).sort().map((date) => ({ date, items: by[date] }));
 }
 // Anything at all recorded for the day (kept for future use). A day counts

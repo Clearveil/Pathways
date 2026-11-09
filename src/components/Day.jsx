@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { today, addDays, uid, now, ACTIVITY, INT_TYPE, KIND_LABEL, activeOn, isActivity, mealKey, woKey, logged, fmtLong, fmtTime } from "../lib/utils.js";
 import { Trash } from "./Icons.jsx";
 import Repeat from "./Repeat.jsx";
@@ -71,10 +71,27 @@ export default function Day({ data, save, date, setDate }) {
   const [newRoutine, setNewRoutine] = useState(blankRoutine);
   useEffect(() => { setConfirmRemove(false); setAddingRoutine(false); }, [date]);
   useEffect(() => { setF(existing || { date, energy: null, inflammation: null, clarity: null, stress: null, flare: false, severity: 3, activity: "", activityNote: "", notes: "", taken: [], doses: {}, meals: [], extras: [], drinks: [], activityStatus: {}, routineExtras: [] }); }, [date, existing]);
+  // Saving as you go. Taps save at once; typed notes save 0.8s after you
+  // stop, on leaving the field, and before the app is hidden, so switching
+  // apps or a resume-sync can never drop what you wrote.
+  const fRef = useRef(f); fRef.current = f;
+  const typing = useRef(null);
+  const saveRef = useRef(null);
+  const flush = () => { if (typing.current) { clearTimeout(typing.current); typing.current = null; saveRef.current && saveRef.current(); } };
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === "hidden") flush(); };
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", flush);
+    return () => { flush(); document.removeEventListener("visibilitychange", onHide); window.removeEventListener("pagehide", flush); };
+  }, [date]);
   if (!f) return null;
 
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
-  const submit = () => { if (f.energy == null) return; saveEntry({ ...f, date }); };
+  // tap-to-save fields
+  const setNow = (k, v) => saveEntry({ ...f, date, [k]: v });
+  // typed fields: save after a pause
+  saveRef.current = () => saveEntry({ ...fRef.current, date });
+  const setTyped = (k, v) => { setF((p) => ({ ...p, [k]: v })); clearTimeout(typing.current); typing.current = setTimeout(() => { typing.current = null; saveRef.current(); }, 800); };
   const isLogged = logged(existing);
   const saveEntry = (next) => { const row = { ...next, id: next.id || uid(), updatedAt: now() }; setF(row); save({ ...data, entries: [...data.entries.filter((e) => e.date !== date), row].sort((a, b) => a.date.localeCompare(b.date)) }); };
   // Drops the whole entry for this day: ratings, notes, checklists, extras.
@@ -105,8 +122,8 @@ export default function Day({ data, save, date, setDate }) {
     const hit = list.find((y) => y.items.toLowerCase() === x.items.toLowerCase() && y.meal === x.meal);
     saveEntry({ ...f, date, extras: hit ? list.map((y) => y === hit ? { ...y, qty: (y.qty || 1) + 1 } : y) : [...list, { id: uid(), qty: 1, meal: x.meal || "meal", items: x.items }] });
   };
-  const indexFoods = data.foods.filter((x) => (x.kind || "food") === "food");
-  const indexDrinks = data.foods.filter((x) => x.kind === "drink");
+  const indexFoods = data.foods.filter((x) => !x.archivedAt && (x.kind || "food") === "food");
+  const indexDrinks = data.foods.filter((x) => !x.archivedAt && x.kind === "drink");
   const foodRepeat = [
     ...recent(data.entries, date, (e) => e.extras, (x) => `${x.items.toLowerCase()}|${x.meal}`).map((x) => ({ key: "r" + x.items + x.meal, label: x.items, detail: x.meal !== "meal" ? x.meal : "recent", onPick: () => putExtra(x) })),
     ...indexFoods.filter((x) => x.status !== "not tolerated").slice(0, 8).map((x) => ({ key: "i" + x.id, label: x.name, detail: "from your Index", onPick: () => putExtra({ items: x.name, meal: "meal" }) })),
@@ -220,7 +237,7 @@ export default function Day({ data, save, date, setDate }) {
     saveEntry({ ...f, date, taken: [...(f.taken || []), i.id], doses });
   };
   const testingFoods = data.foods.filter((x) => x.status === "testing");
-  const notToday = data.interventions.filter((i) => i.status !== "discontinued" && !onSchedule.has(i.id) && !offSchedule.some((o) => o.id === i.id));
+  const notToday = data.interventions.filter((i) => !i.archivedAt && i.status !== "discontinued" && !onSchedule.has(i.id) && !offSchedule.some((o) => o.id === i.id));
   const notTodayRoutine = notToday.filter((i) => !isActivity(i));
   const notTodayActs = notToday.filter(isActivity);
 
@@ -337,21 +354,21 @@ export default function Day({ data, save, date, setDate }) {
       <div className="ht-day">
         <div className="card">
           <h3>{isLogged ? "How the day went" : "How's today going?"}</h3>
-          <Scale label="Energy" value={f.energy} onPick={(n) => set("energy", n)} />
-          <Scale label="Inflammation" hint="1 is none, 10 is the worst you get" value={f.inflammation} onPick={(n) => set("inflammation", n)} />
-          <Scale label="Mental clarity" hint="1 is fog, 10 is sharp" value={f.clarity} onPick={(n) => set("clarity", n)} />
-          <Scale label="Stress" hint="1 is calm, 10 is overwhelmed" value={f.stress} onPick={(n) => set("stress", n)} />
+          <Scale label="Energy" value={f.energy} onPick={(n) => setNow("energy", n)} />
+          <Scale label="Inflammation" hint="1 is none, 10 is the worst you get" value={f.inflammation} onPick={(n) => setNow("inflammation", n)} />
+          <Scale label="Mental clarity" hint="1 is fog, 10 is sharp" value={f.clarity} onPick={(n) => setNow("clarity", n)} />
+          <Scale label="Stress" hint="1 is calm, 10 is overwhelmed" value={f.stress} onPick={(n) => setNow("stress", n)} />
           <div className="ht-row">
             <div className="ht-field">Flare
-              <select value={f.flare ? "yes" : "no"} onChange={(e) => set("flare", e.target.value === "yes")}><option value="no">No</option><option value="yes">Yes</option></select>
+              <select value={f.flare ? "yes" : "no"} onChange={(e) => setNow("flare", e.target.value === "yes")}><option value="no">No</option><option value="yes">Yes</option></select>
             </div>
-            {f.flare && <Scale label="How bad" max={5} value={f.severity} onPick={(n) => set("severity", n)} />}
+            {f.flare && <Scale label="How bad" max={5} value={f.severity} onPick={(n) => setNow("severity", n)} />}
           </div>
           <div className="ht-field">What was different
-            <textarea value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="New food, hard work, conflict, a great day for no reason. Write as much as you want." />
+            <textarea value={f.notes} onChange={(e) => setTyped("notes", e.target.value)} onBlur={flush} placeholder="New food, hard work, conflict, a great day for no reason. Write as much as you want." />
           </div>
           <div className="day-actions">
-            <button className="btn" onClick={submit} disabled={f.energy == null}>{isLogged ? "Update" : "Save today"}</button>
+            <span className="hint autosave">{existing ? "Saved as you go" : "Saves as you go"}</span>
             {existing && !confirmRemove && <button className="ht-link with-icon" onClick={() => setConfirmRemove(true)}><Trash size={13} /> Remove this day</button>}
             {existing && confirmRemove && <span className="confirm">Remove everything logged for this day? <button className="ht-link danger" onClick={removeEntry}>Yes, remove</button><button className="ht-link" onClick={() => setConfirmRemove(false)}>Keep</button></span>}
           </div>
@@ -475,11 +492,11 @@ export default function Day({ data, save, date, setDate }) {
             </div>}
             <div className="ht-row" style={{ marginTop: 12 }}>
               <div className="ht-field" style={{ marginBottom: 4 }}>How hard overall
-                <select value={f.activity} onChange={(e) => { const v = e.target.value; setF((p) => ({ ...p, activity: v, activityAuto: false })); }}><option value="">Not set</option>{ACTIVITY.map((a) => <option key={a} value={a}>{a}</option>)}</select>
+                <select value={f.activity} onChange={(e) => saveEntry({ ...f, date, activity: e.target.value, activityAuto: false })}><option value="">Not set</option>{ACTIVITY.map((a) => <option key={a} value={a}>{a}</option>)}</select>
                 {f.activityAuto && f.activity && <span className="hint">Set from what you did — change it if the day was harder overall.</span>}
               </div>
               <div className="ht-field" style={{ flex: 2, marginBottom: 4 }}>Note
-                <input value={f.activityNote} onChange={(e) => set("activityNote", e.target.value)} placeholder="Felt fine, or paid for it later" />
+                <input value={f.activityNote} onChange={(e) => setTyped("activityNote", e.target.value)} onBlur={flush} placeholder="Felt fine, or paid for it later" />
               </div>
             </div>
             <p className="hint" style={{ marginTop: 8 }}>{actShown.length || plannedWo.length ? "Tap once for done, twice for skipped. Skipping on a bad day is data, not a miss — and it's recorded differently from leaving it blank." : "Regular activities come from the Index on the days you schedule them. Anything else goes under + Add."}</p>

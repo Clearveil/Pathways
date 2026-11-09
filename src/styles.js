@@ -208,6 +208,63 @@ export const css = `
   .consent { display:flex; gap:10px; align-items:flex-start; font-size:12px; line-height:1.45; color:var(--ink2); margin:-4px 0 14px; cursor:pointer; }
   .consent input { margin-top:2px; width:16px; height:16px; flex-shrink:0; accent-color:var(--acc); }
   .consent.disabled { opacity:.5; cursor:default; }
+  .archived { margin-top:10px; padding-top:6px; border-top:1px dashed var(--line2); }
+  .archived .ht-link { font-size:12px; }
+  .autosave { font-size:12px; }
+  .report-list li { cursor:pointer; }
+  .report-list li:hover { background:var(--bg2); }
+  /* --- the report: always light, paper-like, readable on screen and in print --- */
+  .report { --r-ink:#161616; --r-mute:#6B6B6B; --r-line:#E4E4E4; background:#fff; color:var(--r-ink); border:1px solid var(--line); border-radius:14px; padding:28px 30px; max-width:820px; margin:0 auto; font-size:13px; line-height:1.5; }
+  .r-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; border-bottom:2px solid var(--r-ink); padding-bottom:12px; margin-bottom:14px; }
+  .r-head h1 { margin:4px 0 2px; font-size:22px; }
+  .r-head p { margin:0; color:var(--r-mute); }
+  .r-brand { display:flex; align-items:center; gap:6px; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--r-mute); }
+  .r-brand img { height:16px; }
+  .r-meta { text-align:right; font-size:12px; }
+  .r-section { margin:18px 0; break-inside:avoid; }
+  .r-section h2 { font-size:14px; text-transform:uppercase; letter-spacing:.05em; margin:0 0 8px; padding-bottom:4px; border-bottom:1px solid var(--r-line); }
+  .r-section h3 { font-size:13px; margin:12px 0 4px; }
+  .r-summary { font-size:15px; margin:0 0 10px; }
+  .r-tiles { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; }
+  .r-tile { border:1px solid var(--r-line); border-radius:10px; padding:8px 10px; display:flex; flex-direction:column; }
+  .r-tile-label { font-size:11px; color:var(--r-mute); }
+  .r-tile-avg { font-size:22px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .r-tile-sub { font-size:11px; color:var(--r-mute); }
+  .r-note { font-size:11px; color:var(--r-mute); margin:6px 0 0; }
+  .r-muted { color:var(--r-mute); }
+  .r-chart { height:220px; }
+  .r-legend { display:flex; flex-wrap:wrap; gap:14px; font-size:11px; color:var(--r-mute); margin-top:4px; }
+  .r-legend span { display:inline-flex; align-items:center; gap:5px; }
+  .r-timeline { list-style:none; margin:0; padding:0; }
+  .r-timeline li { display:flex; gap:12px; padding:3px 0; border-bottom:1px dotted var(--r-line); }
+  .r-timeline li span { width:56px; flex-shrink:0; color:var(--r-mute); font-variant-numeric:tabular-nums; }
+  .r-test, .r-finding { padding:6px 0; border-bottom:1px dotted var(--r-line); }
+  .r-test p, .r-finding p { margin:2px 0 0; }
+  .r-list { margin:0; }
+  .r-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .r-table th { text-align:left; font-weight:600; color:var(--r-mute); border-bottom:1px solid var(--r-ink); padding:4px 6px 4px 0; }
+  .r-table td { border-bottom:1px solid var(--r-line); padding:4px 6px 4px 0; vertical-align:top; }
+  .r-table tr { break-inside:avoid; }
+  .r-group td { font-weight:600; padding-top:8px; }
+  .r-daily td:last-child { color:var(--r-mute); }
+  .r-foot { margin-top:20px; padding-top:8px; border-top:1px solid var(--r-line); font-size:11px; color:var(--r-mute); }
+  @media (max-width:720px) {
+    .report { padding:16px 14px; border-radius:10px; }
+    .r-tiles { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .r-head { flex-direction:column; }
+    .r-meta { text-align:left; }
+    .r-table { font-size:11px; }
+  }
+  @media print {
+    .ht-top, .ht-status, .no-print, .toast { display:none !important; }
+    .ht, .ht.dark { background:#fff !important; color:#000; min-height:0; }
+    .ht-main { padding:0 !important; max-width:none !important; }
+    .report { border:0; border-radius:0; padding:0; max-width:none; }
+    .r-tiles { grid-template-columns:repeat(4, minmax(0,1fr)) !important; }
+    .r-head { flex-direction:row !important; }
+    .r-appendix { break-before:page; }
+    @page { margin:14mm; }
+  }
   .choice { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
   .dose-fields select { width:auto; }
 

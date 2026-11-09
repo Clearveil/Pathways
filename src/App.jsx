@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase, LOCAL_ONLY, CONFIG_ERROR } from "./lib/supabase.js";
-import { today, EMPTY, migrate } from "./lib/utils.js";
+import { today, EMPTY, migrate, KEY } from "./lib/utils.js";
 import { store } from "./lib/store.js";
 import { css } from "./styles.js";
 import Auth from "./components/Auth.jsx";
@@ -9,11 +9,27 @@ import Week from "./components/Week.jsx";
 import Month from "./components/Month.jsx";
 import Library from "./components/Library.jsx";
 import Trends from "./components/Trends.jsx";
+import Reports from "./components/Reports.jsx";
 import Menu from "./components/Menu.jsx";
 import Modal from "./components/Modal.jsx";
 import { normalizePhone, formatPhone, MARKETING_CONSENT } from "./lib/phone.js";
 import PlanImport from "./components/PlanImport.jsx";
 import { Share, Sun, Moon, User, CloudCheck, CloudOff, Check, Drive, Upload, Download, Flask } from "./components/Icons.jsx";
+
+// Last-write-wins merge by updatedAt, never deleting anything. Used for
+// importing a backup and for recovering saves that failed while offline.
+const mergeData = (base, extra) => {
+  const merge = (mine, theirs, key) => {
+    const by = new Map((mine || []).map((x) => [x[key], x]));
+    (theirs || []).forEach((t) => { const m = by.get(t[key]); if (!m || (t.updatedAt || "") > (m.updatedAt || "")) by.set(t[key], t); });
+    return [...by.values()];
+  };
+  return { ...base,
+    entries: merge(base.entries, extra.entries, "date").sort((x, y) => x.date.localeCompare(y.date)),
+    foods: merge(base.foods, extra.foods, "id"), interventions: merge(base.interventions, extra.interventions, "id"),
+    meals: merge(base.meals, extra.meals, "id"), workouts: merge(base.workouts, extra.workouts, "id") };
+};
+const UNSYNCED = `${KEY}:unsynced`;
 
 // The gate. Nothing below renders until Supabase says who is signed in.
 export default function App() {
@@ -65,14 +81,26 @@ function HealthTracker({ session }) {
       if (d && JSON.stringify(d) !== JSON.stringify(dataRef.current)) setData(d);
       setStorageOk(true);
       if (!quiet) { setMsg("Up to date"); setTimeout(() => setMsg(""), 1200); }
+      setSyncing(false);
+      return d;
     } catch (e) { console.error(e); setStorageOk(false); if (!quiet) setMsg(`Couldn't sync — ${e.message || "database unreachable"}`); }
     setSyncing(false);
+    return null;
   };
 
   useEffect(() => {
     (async () => {
       try { if ((await store.pref("theme")) === "dark") setDark(true); } catch (e) {}
-      await refresh(true);
+      const d = await refresh(true);
+      if (!LOCAL_ONLY && d) {
+        let pend = null;
+        try { pend = JSON.parse(localStorage.getItem(UNSYNCED)); } catch (e) {}
+        if (pend) {
+          const merged = mergeData(d, migrate(pend));
+          setData(merged);
+          try { await store.saveAll(merged); localStorage.removeItem(UNSYNCED); setMsg("Recovered changes that hadn't saved"); setTimeout(() => setMsg(""), 2500); } catch (e) {}
+        }
+      }
       try { const p = await store.profile(); if (p?.plan) setPlan(p.plan); setProfile(p || {}); } catch (e) {}
       setLoaded(true);
     })();
@@ -91,12 +119,21 @@ function HealthTracker({ session }) {
   }, []);
 
   const save = async (next) => {
+    const prev = dataRef.current;
     setData(next);
     pending.current += 1;
     try {
       await store.saveAll(next);
+      if (!LOCAL_ONLY) localStorage.removeItem(UNSYNCED);
       setStorageOk(true); setMsg("Saved"); setTimeout(() => setMsg(""), 1200);
-    } catch (e) { setStorageOk(false); setMsg(`Not saved — ${e.message || "database unreachable"}`); }
+      if (next.interventions !== prev.interventions || next.foods !== prev.foods || next.entries.length < prev.entries.length) {
+        store.loadChanges().then((changes) => setData((d) => ({ ...d, changes }))).catch(() => {});
+      }
+    } catch (e) {
+      // Keep it on this device; it's merged back in and saved next time the app opens.
+      if (!LOCAL_ONLY) { try { const { changes, ...rest } = next; localStorage.setItem(UNSYNCED, JSON.stringify(rest)); } catch (e2) {} }
+      setStorageOk(false); setMsg(`Not saved yet — kept on this device and retried next time (${e.message || "database unreachable"})`);
+    }
     pending.current -= 1;
   };
 
@@ -109,8 +146,9 @@ function HealthTracker({ session }) {
   }, [data]);
   const dayN = openWindow?.start ? Math.max(1, Math.round((new Date(today()) - new Date(openWindow.start)) / 864e5) + 1) : null;
 
-  const exportJSON = () => {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const exportJSON = async () => {
+    const reports = await store.listReports().catch(() => []);
+    const blob = new Blob([JSON.stringify({ ...data, reports }, null, 2)], { type: "application/json" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `pathways-${today()}.json`; a.click();
   };
 
@@ -127,13 +165,7 @@ function HealthTracker({ session }) {
           (theirs || []).forEach((t) => { const m = by.get(t[key]); if (!m || (t.updatedAt || "") > (m.updatedAt || "")) by.set(t[key], t); });
           return [...by.values()];
         };
-        save({
-          entries: merge(data.entries, d.entries || [], "date").sort((x, y) => x.date.localeCompare(y.date)),
-          foods: merge(data.foods, d.foods || [], "id"),
-          interventions: merge(data.interventions, d.interventions || [], "id"),
-          meals: d.meals?.length ? d.meals : data.meals,
-          workouts: d.workouts?.length ? d.workouts : (data.workouts || []),
-        });
+        save(mergeData(data, d));
         setMsg(`Imported ${(d.entries || []).length} days`);
       } catch (e) { setMsg("That file doesn't look like an export from this app"); }
     };
@@ -183,14 +215,17 @@ function HealthTracker({ session }) {
           <input ref={importRef} type="file" accept=".json" style={{ display: "none" }} onChange={(e) => { if (e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ""; }} />
           <button className="ht-link desk-only" onClick={() => setDataModal(true)}>Import</button>
           <button className="ht-link desk-only" onClick={() => setDataModal(true)}>Export</button>
+          <button className="ht-link desk-only" onClick={() => setView("reports")}>Reports</button>
           <Menu className="mob-only" icon={<Share />} label="Import or export">
             <button onClick={exportJSON}><Download /> Export everything<small>A JSON backup of all your data</small></button>
             <button onClick={() => setPlanImport(true)}><Upload /> Import a meal or workout plan<small>CSV, with a guide</small></button>
             <button onClick={pickImport}><Upload /> Restore a backup<small>A .json file exported from Pathways</small></button>
+            <button onClick={() => setView("reports")}><Download /> Reports<small>A summary for your doctor or your records</small></button>
           </Menu>
           <button className="icon-btn" onClick={toggleTheme} title={dark ? "Light mode" : "Dark mode"} aria-label={dark ? "Light mode" : "Dark mode"}>{dark ? <Sun /> : <Moon />}</button>
           <Menu icon={<User />} text="Account" label="Account">
             <div className="menu-head">{session.user.email}<small>{PLAN_LABEL[plan] || plan} plan</small></div>
+            <button onClick={() => setView("reports")}>Reports<small>Create, reopen or reprint</small></button>
             <button onClick={openContact}>Phone & texts<small>{profile.phone ? formatPhone(profile.phone) + (profile.marketing_texts ? " · texts on" : "") : "Not added"}</small></button>
             {!LOCAL_ONLY && <button onClick={() => setShowPlan(true)}>View plan</button>}
             {!LOCAL_ONLY && <button onClick={signOut}>Sign out</button>}
@@ -211,6 +246,7 @@ function HealthTracker({ session }) {
         {view === "month" && <Month data={data} save={save} date={date} setDate={setDate} goDay={goDay} />}
         {view === "library" && <Library data={data} save={save} openWindow={openWindow} />}
         {view === "trends" && <Trends data={data} dark={dark} />}
+        {view === "reports" && <Reports data={data} email={LOCAL_ONLY ? "" : session.user.email} onBack={() => setView("day")} />}
       </main>
       <PlanImport data={data} save={save} open={planImport} onClose={() => setPlanImport(false)} onMessage={setMsg} />
       {dataModal && (

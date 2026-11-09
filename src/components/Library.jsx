@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { now } from "../lib/utils.js";
 import { today, addDays, uid, FOOD_STATUS, CONFIDENCE, INT_TYPE, INT_STATUS, KIND_LABEL, DAY_SHORT, isOn, isActivity, scheduleLabel } from "../lib/utils.js";
 import { useNarrow } from "../lib/useNarrow.js";
 import { DOSE_UNITS, TIME_UNITS, doseLabel, partsOf } from "../lib/dose.js";
@@ -41,6 +42,26 @@ function CompactRow({ off, lead, name, sub, pill, kv, actions }) {
           <div className="lrow-actions">{actions}</div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Removed items, kept for history. Restore brings one back; items that
+// were never logged can be deleted for good.
+function Archived({ items, onRestore, onDelete, hasHistory }) {
+  const [open, setOpen] = useState(false);
+  if (!items.length) return null;
+  return (
+    <div className="archived">
+      <button type="button" className="ht-link" onClick={() => setOpen(!open)}>{open ? "Hide" : "Show"} removed ({items.length})</button>
+      {open && <ul className="list">
+        {items.map((x) => <li key={x.id}>
+          <span style={{ flex: 1, color: "var(--mute)" }}>{x.name}</span>
+          <button className="ht-link" onClick={() => onRestore(x.id)}>Restore</button>
+          {!hasHistory(x) && <button className="ht-link" onClick={() => onDelete(x.id)} title="Never logged, so nothing is lost">Delete for good</button>}
+        </li>)}
+      </ul>}
+      {open && <p className="hint" style={{ margin: "4px 0 0" }}>Removed items stay in your history, insights and reports. Only things you never logged can be deleted for good.</p>}
     </div>
   );
 }
@@ -103,9 +124,16 @@ function Interventions({ kind, data, save, openWindow }) {
     setWarn("");
     save({ ...data, interventions: data.interventions.map((x) => x.id === id ? { ...x, ...patch } : x) });
   };
-  const remove = (id) => save({ ...data, interventions: data.interventions.filter((x) => x.id !== id) });
+  // Remove never deletes: it stops the item (end date yesterday, if it was
+  // running) and archives it, so past days keep its name and insights keep
+  // its history. Only items never logged can be deleted outright.
+  const remove = (id) => save({ ...data, interventions: data.interventions.map((x) => x.id !== id ? x : { ...x, archivedAt: now(), end: x.end || (x.start && x.start <= addDays(today(), -1) ? addDays(today(), -1) : x.end) }) });
+  const restore = (id) => save({ ...data, interventions: data.interventions.map((x) => x.id === id ? { ...x, archivedAt: "" } : x) });
+  const hasHistory = (x) => data.entries.some((e) => e.taken?.includes(x.id) || (e.doses || {})[x.id] != null || (e.activityStatus || {})[x.id]);
+  const purge = (id) => save({ ...data, interventions: data.interventions.filter((x) => x.id !== id) });
   const order = { testing: 0, baseline: 1, established: 2, discontinued: 3 };
-  const mine = data.interventions.filter((x) => (isActivity(x) ? "activity" : x.type) === kind);
+  const ofKind = data.interventions.filter((x) => (isActivity(x) ? "activity" : x.type) === kind);
+  const mine = ofKind.filter((x) => !x.archivedAt), archived = ofKind.filter((x) => x.archivedAt);
   const sorted = [...mine].sort((a, b) => (isOn(b) - isOn(a)) || order[a.status] - order[b.status] || (b.start || "").localeCompare(a.start || ""));
   const toggleOn = (x) => {
     if (isOn(x)) update(x.id, { end: addDays(today(), -1) });
@@ -117,7 +145,7 @@ function Interventions({ kind, data, save, openWindow }) {
   const statusSelect = (x) => <select value={x.status} onChange={(e) => update(x.id, { status: e.target.value })} className={`pill ${x.status}`}>{INT_STATUS.map((s) => <option key={s}>{s}</option>)}</select>;
   const endInput = (x) => <input type="date" value={x.end || ""} onChange={(e) => update(x.id, { end: e.target.value })} style={{ width: 118 }} />;
   const outcomeInput = (x) => <input value={x.outcome || ""} onChange={(e) => update(x.id, { outcome: e.target.value })} placeholder="What happened" style={{ width: 130 }} />;
-  const actions = (x) => <><button className="ht-link" onClick={() => startEdit(x)}>Edit</button><button className="ht-link" onClick={() => remove(x.id)}>Remove</button></>;
+  const actions = (x) => <><button className="ht-link" onClick={() => startEdit(x)}>Edit</button><button className="ht-link" onClick={() => remove(x.id)} title="Takes it off your Index. Its history is kept.">Remove</button></>;
   const formAct = f.type === "activity";
   const formTimed = f.type === "treatment" && f.measure === "time";
   const timeSlots = formAct || formTimed ? 1 : Math.max(1, f.dosesPerDay || 1);
@@ -223,6 +251,7 @@ function Interventions({ kind, data, save, openWindow }) {
             </tr>
           ))}</tbody></table></div>
       )}
+      <Archived items={archived} onRestore={restore} onDelete={purge} hasHistory={hasHistory} />
     </div>
   );
 }
@@ -254,12 +283,16 @@ function Foods({ kind, data, save, openWindow }) {
     setWarn("");
     save({ ...data, foods: data.foods.map((x) => x.id === id ? { ...x, status, lastTested: today() } : x) });
   };
-  const remove = (id) => save({ ...data, foods: data.foods.filter((x) => x.id !== id) });
+  const remove = (id) => save({ ...data, foods: data.foods.map((x) => x.id === id ? { ...x, archivedAt: now(), status: x.status === "testing" ? "unknown" : x.status } : x) });
+  const restore = (id) => save({ ...data, foods: data.foods.map((x) => x.id === id ? { ...x, archivedAt: "" } : x) });
+  const hasHistory = (x) => x.status !== "unknown" || data.entries.some((e) => (e.extras || []).some((m) => m.items.toLowerCase().includes(x.name.toLowerCase())) || (e.drinks || []).some((d) => d.name.toLowerCase() === x.name.toLowerCase()));
+  const purge = (id) => save({ ...data, foods: data.foods.filter((x) => x.id !== id) });
   const order = { testing: 0, "not tolerated": 1, unknown: 2, tolerated: 3 };
-  const mine = data.foods.filter((x) => (x.kind || "food") === kind);
+  const ofKind = data.foods.filter((x) => (x.kind || "food") === kind);
+  const mine = ofKind.filter((x) => !x.archivedAt), archived = ofKind.filter((x) => x.archivedAt);
   const sorted = [...mine].sort((a, b) => order[a.status] - order[b.status] || a.name.localeCompare(b.name));
   const statusSelect = (x) => <select value={x.status} onChange={(e) => setStatus(x.id, e.target.value)} className={`pill ${x.status.replace(" ", "-")}`}>{FOOD_STATUS.map((s) => <option key={s}>{s}</option>)}</select>;
-  const actions = (x) => <><button className="ht-link" onClick={() => startEdit(x)}>Edit</button><button className="ht-link" onClick={() => remove(x.id)}>Remove</button></>;
+  const actions = (x) => <><button className="ht-link" onClick={() => startEdit(x)}>Edit</button><button className="ht-link" onClick={() => remove(x.id)} title="Takes it off your Index. Its history is kept.">Remove</button></>;
 
   return (
     <div className="card">
@@ -300,6 +333,7 @@ function Foods({ kind, data, save, openWindow }) {
             </tr>
           ))}</tbody></table></div>
       )}
+      <Archived items={archived} onRestore={restore} onDelete={purge} hasHistory={hasHistory} />
     </div>
   );
 }

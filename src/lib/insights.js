@@ -11,7 +11,7 @@
 // The verdict sentence on each card uses the same thresholds as the group,
 // so a card can't say "no clear difference" and sit under Macro.
 
-import { today, addDays, mealsOn, workoutsOn, logged, adherence, usesStatus, scheduledOn, changesOf } from "./utils.js";
+import { today, addDays, mealsOn, workoutsOn, logged, adherence, usesStatus, scheduledOn, changesOf, testWindows, testStart } from "./utils.js";
 
 export const NOISE = 0.5;  // under this, day-to-day noise
 export const CLEAR = 1.0;  // at or over this (with enough days), a clear gap
@@ -161,15 +161,28 @@ export function buildInsights(data) {
 
   // ---- Each tested intervention -------------------------------------------------
   data.interventions.filter((i) => i.start && ["testing", "established", "discontinued"].includes(i.status)).forEach((i) => {
+    const start = testStart(data, i);
     const end = i.end || today();
-    const inside = inRange(i.start, end);
-    const before = inRange(addDays(i.start, -14), addDays(i.start, -1));
+    const inside = inRange(start, end);
+    const before = inRange(addDays(start, -14), addDays(start, -1));
     if (inside.length < 5) return card({ kind: "waiting", tone: "flat", title: i.name, body: `${inside.length} day${inside.length === 1 ? "" : "s"} of data inside this window. Five is the minimum before comparing; ten to fourteen is better.` });
     if (before.length < 5) return card({ kind: "waiting", tone: "flat", title: i.name, body: `${inside.length} days logged during, but fewer than 5 days logged before it started — no baseline to compare against. The comparison would be meaningless.` });
     const gi = gapInfo(inside, before), g = gi.g;
     const fd = flareRate(inside) - flareRate(before);
     card({ kind: "compare", effect: g, n: Math.min(inside.length, before.length), span: spanOf(inside), tone: toneOf(g), title: `${i.name} (${inside.length} days)`,
       body: `Energy averaged ${avg(inside).toFixed(1)} during vs ${avg(before).toFixed(1)} in the two weeks before.${infTxt(inside, before)} Flare days: ${Math.round(flareRate(inside) * 100)}% vs ${Math.round(flareRate(before) * 100)}%${Math.abs(fd) > 0.15 ? (fd < 0 ? " — fewer, which matters more than any single average." : " — more, which matters more than any single average.") : "."} ${say(gi, "A real-looking difference — worth keeping, but one window isn't proof.", "Worse than before. If nothing else changed, that's a signal to stop and see if it recovers.", "No clear difference. That's a valid result — this one probably isn't doing much either way.")}` });
+  });
+
+  // ---- Food and drink tests (windows come from the change log) ---------------------
+  testWindows(data).forEach((w) => {
+    const inside = inRange(w.from, w.to), before = inRange(addDays(w.from, -14), addDays(w.from, -1));
+    const title = `${w.name} (${w.kind} test${w.result === "ongoing" ? ", ongoing" : ""})`;
+    if (inside.length < 3) return card({ kind: "waiting", tone: "flat", title, body: `${inside.length} day${inside.length === 1 ? "" : "s"} logged during this test. Three or four days of eating or drinking it is the minimum before comparing.` });
+    if (before.length < 5) return card({ kind: "waiting", tone: "flat", title, body: `Fewer than 5 days logged in the two weeks before this test started — no baseline to compare against.` });
+    const gi = gapInfo(inside, before), g = gi.g;
+    const nxt = nextDays(inside.slice(-1));
+    card({ kind: "compare", effect: g, n: Math.min(inside.length, before.length), tone: toneOf(g), title,
+      body: `${inside.length} days during vs the two weeks before: energy ${avg(inside).toFixed(1)} vs ${avg(before).toFixed(1)}.${infTxt(inside, before)} Flare days ${Math.round(flareRate(inside) * 100)}% vs ${Math.round(flareRate(before) * 100)}%.${w.result !== "ongoing" ? ` You marked it ${w.result}.` : ""} ${say(gi, "No sign it's costing you.", "Looks like it may not suit you.", "No clear difference while testing it.")}` });
   });
 
   // ---- Every start and stop, not just tests ---------------------------------------
