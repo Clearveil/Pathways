@@ -256,16 +256,27 @@ export const css = `
   .range-custom input { font:inherit; font-size:13px; color:var(--ink); padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:var(--field); }
   .ht.dark .range-custom input { color-scheme:dark; }
   .trends-card { padding-bottom:10px; }
-  .tiles { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; margin-bottom:10px; }
-  .tile { font:inherit; text-align:left; border:1px solid var(--line); background:var(--field); border-radius:12px; padding:8px 10px; cursor:pointer; color:var(--ink); display:flex; flex-direction:column; gap:2px; min-width:0; }
-  .tile:hover { border-color:var(--ink2); }
-  .tile.off { opacity:.45; background:var(--card); }
-  .tile.off .tile-avg { text-decoration:line-through; text-decoration-color:var(--mute); }
-  .tile-top { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .tile-top svg { flex-shrink:0; }
-  .tile-avg { font-size:20px; font-variant-numeric:tabular-nums; line-height:1.2; }
-  .tile-avg small { font-size:11px; color:var(--mute); margin-left:2px; }
-  .tile-delta { font-size:11px; color:var(--ink2); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  /* Measure pills: legend + toggle + snapshot. On = filled solid with a
+     check; off = faded outline, no check. */
+  .tiles { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+  .tile { font:inherit; font-size:12px; display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 10px 0 8px; border-radius:999px; cursor:pointer; white-space:nowrap;
+    border:1px solid var(--acc); background:var(--acc); color:var(--on-acc); transition:background .12s, color .12s, border-color .12s, opacity .12s; }
+  .tile:hover { box-shadow:0 0 8px var(--glow); }
+  .tile.off { background:transparent; border-color:var(--line); color:var(--mute); }
+  .tile.off:hover { border-color:var(--ink2); color:var(--ink2); box-shadow:none; }
+  .tile-check { width:10px; font-size:11px; text-align:center; }
+  .tile svg { flex-shrink:0; display:block; }
+  .tile-avg { font-weight:600; font-variant-numeric:tabular-nums; }
+  .tile-delta { font-size:11px; opacity:.85; font-variant-numeric:tabular-nums; }
+  .tile.off .tile-avg, .tile.off .tile-delta { opacity:.7; }
+  /* better / worse arrow: the app's existing good / bad colours, picked to
+     read on the pill (filled pills are dark in light mode, light in dark). */
+  .tile { --pill-good:#9BD3A6; --pill-bad:#F0A193; }
+  .tile.off, .ht.dark .tile.off { --pill-good:var(--good); --pill-bad:var(--bad); }
+  .ht.dark .tile:not(.off) { --pill-good:#2F6B3C; --pill-bad:#9A3B2E; }
+  .tile-delta.good { color:var(--pill-good); opacity:1; }
+  .tile-delta.bad { color:var(--pill-bad); opacity:1; }
+  .lbl-short { display:none; }
   .view-row { display:flex; align-items:flex-start; gap:10px; margin-bottom:6px; }
   .view-row .hint { flex:1; margin:0; }
   .seg { display:inline-flex; border:1px solid var(--line); border-radius:9px; padding:2px; background:var(--bg2); flex-shrink:0; }
@@ -294,7 +305,9 @@ export const css = `
   .series button.on { color:var(--ink); border-color:var(--ink2); }
   .series svg { display:block; }
   @media (max-width:720px) {
-    .tiles { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .tile-word { display:none; }
+    .lbl-full { display:none; }
+    .lbl-short { display:inline; }
     .view-row { flex-direction:column-reverse; }
     .daypick button { width:36px; height:36px; }
     .ht-top { padding:calc(14px + env(safe-area-inset-top)) 14px 0; }

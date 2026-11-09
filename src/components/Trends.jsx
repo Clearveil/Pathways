@@ -14,7 +14,7 @@ const RANGES = [["3D", 3], ["1W", 7], ["1M", 30], ["3M", 91], ["6M", 182], ["1Y"
 const MEASURES = [
   { key: "energy", label: "Energy", higherBetter: true, tone: "ink", width: 2.25, dash: undefined, opacity: 1 },
   { key: "inflammation", label: "Inflammation", higherBetter: false, tone: "mute", width: 1.75, dash: "5 3", opacity: 1 },
-  { key: "clarity", label: "Mental clarity", higherBetter: true, tone: "ink", width: 1.75, dash: "1 3", opacity: 0.6 },
+  { key: "clarity", label: "Mental clarity", short: "Clarity", higherBetter: true, tone: "ink", width: 1.75, dash: "1 3", opacity: 0.6 },
   { key: "stress", label: "Stress", higherBetter: false, tone: "mute", width: 1.75, dash: "9 3 2 3", opacity: 1 },
 ];
 const readPref = (k, d) => { try { return localStorage.getItem("pathways:trends:" + k) || d; } catch (e) { return d; } };
@@ -97,20 +97,20 @@ export default function Trends({ data, dark }) {
               const better = d != null && Math.abs(d) >= 0.05 ? (m.higherBetter ? d > 0 : d < 0) : null;
               const off = !!hidden[m.key];
               return (
-                <button key={m.key} type="button" className={"tile" + (off ? " off" : "")} aria-pressed={!off} onClick={() => toggle(m.key)} title={off ? `Show ${m.label}` : `Hide ${m.label}`}>
-                  <span className="tile-top">
-                    <svg width="22" height="8" aria-hidden="true"><line x1="1" y1="4" x2="21" y2="4" stroke={c[m.tone]} strokeOpacity={m.opacity} strokeWidth={m.width + 0.5} strokeDasharray={m.dash} strokeLinecap="round" /></svg>
-                    {m.label}
-                  </span>
-                  <span className="tile-avg">{a != null ? a.toFixed(1) : "—"}<small> avg</small></span>
-                  {priorLabel && <span className="tile-delta">{d == null ? "no earlier data" : Math.abs(d) < 0.05 ? "no change" : `${d > 0 ? "▲" : "▼"} ${Math.abs(d).toFixed(1)} · ${better ? "better" : "worse"}`}</span>}
+                <button key={m.key} type="button" className={"tile" + (off ? " off" : "")} aria-pressed={!off} onClick={() => toggle(m.key)}
+                  title={`${off ? "Show" : "Hide"} ${m.label}${d != null && Math.abs(d) >= 0.05 ? ` — ${better ? "better" : "worse"} than the ${priorLabel}` : ""}`}>
+                  <span className="tile-check" aria-hidden="true">{off ? "" : "✓"}</span>
+                  <svg width="18" height="6" aria-hidden="true"><line x1="1" y1="3" x2="17" y2="3" stroke="currentColor" strokeOpacity={off ? 0.5 : m.opacity} strokeWidth={m.width} strokeDasharray={m.dash} strokeLinecap="round" /></svg>
+                  <span className="tile-label">{m.short ? <><span className="lbl-full">{m.label}</span><span className="lbl-short">{m.short}</span></> : m.label}</span>
+                  <span className="tile-avg">{a != null ? a.toFixed(1) : "—"}</span>
+                  {priorLabel && d != null && Math.abs(d) >= 0.05 && <span className={"tile-delta " + (better ? "good" : "bad")} aria-label={`${better ? "better" : "worse"} by ${Math.abs(d).toFixed(1)}`}>{d > 0 ? "▲" : "▼"}{Math.abs(d).toFixed(1)}<span className="tile-word"> {better ? "better" : "worse"}</span></span>}
                 </button>
               );
             })}
           </div>
           <div className="view-row">
             <span className="hint">
-              {inWin.length} logged day{inWin.length === 1 ? "" : "s"}{priorLabel ? ` · changes vs the ${priorLabel}` : ""}{weekly ? " · weekly averages" : ""}. Tap a measure to show or hide it. Shaded bands are tests{present.some((m) => m.key === "energy") ? "; red dots are flare days" : ""}.
+              {inWin.length} logged day{inWin.length === 1 ? "" : "s"}{priorLabel ? ` · numbers are range averages, arrows the change vs the ${priorLabel}` : " · numbers are range averages"}{weekly ? " · weekly averages" : ""}. Tap a measure to show or hide it. Shaded bands are tests{present.some((m) => m.key === "energy") ? "; red dots are flare days" : ""}.
             </span>
             <div className="seg" role="group" aria-label="Chart layout">
               <button type="button" className={view === "combined" ? "on" : ""} onClick={() => setView("combined")} aria-pressed={view === "combined"}>One chart</button>
